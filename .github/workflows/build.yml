@@ -5,12 +5,15 @@ on:
     branches: [ main, dev ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # lets you trigger a build manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    defaults:
+      run:
+        working-directory: pvpbot
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,7 +30,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('pvpbot/**/*.gradle*', 'pvpbot/**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
@@ -41,8 +44,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pvpbot-1.21.1-${{ github.sha }}
-          # The built jar lands in build/libs/ — fabric-loom names it from
-          # archives_base_name and mod_version in gradle.properties
-          path: build/libs/*.jar
-          # Exclude the -sources.jar if you don't want to publish source
+          path: pvpbot/build/libs/*.jar
           if-no-files-found: error

@@ -24,11 +24,24 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Download wrapper jar if missing
+        run: |
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            mkdir -p gradle/wrapper
+            curl -o gradle/wrapper/gradle-wrapper.jar \
+              https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+          fi
+
       - name: Build mod
-        run: ./gradlew build --no-daemon --no-build-cache --refresh-dependencies
+        run: ./gradlew build --no-daemon --no-build-cache
 
       - name: Upload built jar
         uses: actions/upload-artifact@v4

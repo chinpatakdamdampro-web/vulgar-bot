@@ -6,7 +6,7 @@ while [ -h "$PRG" ] ; do
     else PRG=$(dirname "$PRG")"/$link"; fi
 done
 APP_HOME="$(cd "$(dirname "$PRG")" && pwd -P)"
-DEFAULT_JVM_OPTS='"-Xmx2g" "-Xms512m"'
+DEFAULT_JVM_OPTS="-Xmx2g -Xms512m"
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 if [ -n "$JAVA_HOME" ]; then JAVACMD="$JAVA_HOME/bin/java"
 else JAVACMD="java"; fi

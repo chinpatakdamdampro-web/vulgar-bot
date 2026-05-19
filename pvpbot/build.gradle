@@ -1,0 +1,59 @@
+plugins {
+    id 'fabric-loom' version '1.6.12'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://libraries.minecraft.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // CarpetPvP replaces regular Carpet — drop the jar into libs/
+    // It is API-compatible: same carpet.patches.EntityPlayerMPFake,
+    // same carpet.helpers.EntityPlayerActionPack, same spawn methods.
+    modCompileOnly fileTree(dir: 'libs', include: ['carpet-pvp-*.jar'])
+
+    // OrbitalStrike+ — OPTIONAL. Only needed to compile, NOT bundled/required at runtime.
+    // If the mod is absent on the server, isModLoaded("orbitalstrike") returns false
+    // and the bot plays normally with no orbital strike behavior.
+    // Drop orbitalstrike_1_21_1-1_0_7.jar into libs/ alongside the CarpetPvP jar.
+    compileOnly fileTree(dir: 'libs', include: ['orbitalstrike*.jar'])
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    it.options.release = 21
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}

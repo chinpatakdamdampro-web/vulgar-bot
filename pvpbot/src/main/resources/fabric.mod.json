@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "pvpbot",
+  "version": "${version}",
+  "name": "PvPBot",
+  "description": "Carpet-based PvP bot mod with intelligent combat AI.",
+  "authors": ["PvPBot"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.pvpbot.PvPBotMod"]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "carpet": "*"
+  }
+}

@@ -17,14 +17,14 @@ import net.minecraft.util.math.Vec3d;
 import java.util.Random;
 
 /**
- * CombatController — full PvP AI brain.
+ * CombatController â€” full PvP AI brain.
  *
  * Changes in this version:
  *  - Knockback detection removed from here; MovementController owns it now.
  *    CombatController still pauses attacks while suppression is active so the
  *    bot doesn't frantically swing while being knocked around.
  *  - minRangeSq attack gate raised to 1.0 (1.0 block) to match the new
- *    MIN_COMBAT_RANGE in MovementController — bot won't freeze-attack while
+ *    MIN_COMBAT_RANGE in MovementController â€” bot won't freeze-attack while
  *    inside the too-close zone it's already backing out of.
  *  - Mace block: shield goes into MAIN HAND (not offhand) so the bot holds it
  *    facing the falling player, then counter-attacks after impact.
@@ -93,7 +93,7 @@ public class CombatController {
     // SMP mode: shield prediction
     private int smpShieldTimer = 0;
 
-    // Post-totem recovery — after totem pops, force a re-buff cycle
+    // Post-totem recovery â€” after totem pops, force a re-buff cycle
     private boolean totemJustPopped = false;
 
     public CombatController(PvPBotEntity bot,
@@ -118,7 +118,7 @@ public class CombatController {
 
         EntityPlayerMPFake fp = bot.getFakePlayer();
 
-        // LOW HEALTH — retreat (but not if we just popped a totem and are recovering)
+        // LOW HEALTH â€” retreat (but not if we just popped a totem and are recovering)
         if (fp.getHealth() <= cfg.gappleThreshold
                 && bot.getState() != PvPBotEntity.BotState.RETREAT
                 && !totemJustPopped) {
@@ -126,7 +126,7 @@ public class CombatController {
             return;
         }
 
-        // POST-TOTEM RECOVERY — force potions and gaps immediately
+        // POST-TOTEM RECOVERY â€” force potions and gaps immediately
         if (totemJustPopped) {
             inventory.doPostTotemRecovery();
             totemJustPopped = false;
@@ -143,10 +143,10 @@ public class CombatController {
         // Cobweb cooldown countdown
         if (cobwebCooldown > 0) cobwebCooldown--;
 
-        // Wind burst airborne breach swap — opportunistic crit when launched up
+        // Wind burst airborne breach swap â€” opportunistic crit when launched up
         tickWindBurstBreachSwap(target);
 
-        // Cobweb trap + orbital retreat — movement is handled inside tickCobwebTrap
+        // Cobweb trap + orbital retreat â€” movement is handled inside tickCobwebTrap
         // while active, so skip normal combat movement during retreat
         tickCobwebTrap(target);
         if (cobwebTrapActive) return;
@@ -154,7 +154,7 @@ public class CombatController {
         // Movement (only when not retreating for orbital)
         movement.combatMoveTo(target);
 
-        // Totem check — runs every tick (cheap), ensures totem is in offhand
+        // Totem check â€” runs every tick (cheap), ensures totem is in offhand
         boolean hasTotem = inventory.ensureTotemInOffhand();
 
         // Detect totem pop: health reset to 1 is the signal
@@ -163,13 +163,13 @@ public class CombatController {
         // Potion check
         tickPotions();
 
-        // Orbital strike — fires stab shot if target is stuck in cobweb (optional mod)
+        // Orbital strike â€” fires stab shot if target is stuck in cobweb (optional mod)
         tickOrbitalStrike(target);
 
-        // Cobweb trap — place webs at target's feet then retreat for orbital shot
+        // Cobweb trap â€” place webs at target's feet then retreat for orbital shot
         tickCobwebTrap(target);
 
-        // Mace/falling-player shield — mainhand block
+        // Mace/falling-player shield â€” mainhand block
         if (!hasTotem) {
             // Only raise mainhand shield if no totem protecting us
             updateMaceBlock(target);
@@ -199,10 +199,10 @@ public class CombatController {
         // Attack cooldown
         if (attackCooldown > 0) { attackCooldown--; return; }
 
-        // Range check — must be outside backaway zone AND within reach.
-        // MIN_COMBAT_RANGE in MovementController is 1.4, so 1.4² = 1.96.
+        // Range check â€” must be outside backaway zone AND within reach.
+        // MIN_COMBAT_RANGE in MovementController is 1.4, so 1.4Â² = 1.96.
         // Using 1.96 here ensures the bot never tries to attack while
-        // simultaneously backing away — which caused the inconsistent freeze.
+        // simultaneously backing away â€” which caused the inconsistent freeze.
         double distSq    = targeting.distanceToTargetSq();
         double minRangeSq = 1.96; // must match MIN_COMBAT_RANGE_SQ in MovementController
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
@@ -245,7 +245,7 @@ public class CombatController {
         if (timerDone) {
             movement.stop();
             if (target != null && target.isAlive()) {
-                // Re-engage regardless of hunger — hunger shouldn't lock a bot
+                // Re-engage regardless of hunger â€” hunger shouldn't lock a bot
                 // out of combat indefinitely. If health is still low, extend retreat.
                 if (healthOk) {
                     bot.setState(PvPBotEntity.BotState.ATTACK);
@@ -274,7 +274,7 @@ public class CombatController {
     /**
      * Detect when a Totem of Undying was consumed.
      *
-     * A totem fires when damage would kill the player — the server applies the
+     * A totem fires when damage would kill the player â€” the server applies the
      * damage, finds health would go to <=0, activates the totem, and sets health
      * to exactly 1.0f. On the SAME tick we see the health snap from whatever
      * the previous-tick value was (could still be >1) up to exactly 1.0.
@@ -317,7 +317,7 @@ public class CombatController {
     // The orbital shot only fires IF StabShot is installed.
     //
     // BUG FIXES:
-    //  1. Removed isOrbitalModLoaded() gate from webbing — webs fire always.
+    //  1. Removed isOrbitalModLoaded() gate from webbing â€” webs fire always.
     //  2. combatMoveTo is skipped while cobwebTrapActive so retreat isn't overridden.
     //  3. cobwebTrapActive flag blocks normal combat movement during retreat.
     // =========================================================================
@@ -327,7 +327,7 @@ public class CombatController {
         if (!inventory.hasCobwebs(2)) return;
 
         if (cobwebTrapActive) {
-            // Movement is handled here — skip combatMoveTo in main tick
+            // Movement is handled here â€” skip combatMoveTo in main tick
             tickCobwebRetreat(target);
             return;
         }
@@ -376,7 +376,7 @@ public class CombatController {
         boolean timerExpired  = orbitalRetreatTimer <= 0;
 
         if (reachedSpot || farEnough || timerExpired) {
-            // Arrived — face target and fire orbital if available
+            // Arrived â€” face target and fire orbital if available
             movement.lookAtTarget(target);
             cobwebTrapActive     = false;
             orbitalRetreatTarget = null;
@@ -394,7 +394,7 @@ public class CombatController {
     //
     // REWORK: The previous /ob stab command approach failed because fake players
     // don't route commands correctly as a source. We now call
-    // OrbitalStrikeLogic.summonStab() directly via reflection — this is the
+    // OrbitalStrikeLogic.summonStab() directly via reflection â€” this is the
     // exact same method the fishing-rod item triggers internally when you cast it
     // at a block. Same effect, no command routing, no fake-player permission
     // issues, works reliably.
@@ -419,7 +419,7 @@ public class CombatController {
         boolean feetInWeb = world.getBlockState(feetPos).isOf(Blocks.COBWEB);
         boolean headInWeb = world.getBlockState(feetPos.up()).isOf(Blocks.COBWEB);
         boolean inWeb     = feetInWeb || headInWeb;
-        boolean isBubble  = feetInWeb && headInWeb; // cobweb bubble — truly trapped
+        boolean isBubble  = feetInWeb && headInWeb; // cobweb bubble â€” truly trapped
 
         if (inWeb) {
             targetInWebTicks++;
@@ -436,8 +436,8 @@ public class CombatController {
     }
 
     /**
-     * Fires stab via StabShot mod (our own mod — com.pvpbot.stabshot.logic.StabLogic).
-     * summonStab IS static — invoke(null, ...) is correct.
+     * Fires stab via StabShot mod (our own mod â€” com.pvpbot.stabshot.logic.StabLogic).
+     * summonStab IS static â€” invoke(null, ...) is correct.
      * Using reflection keeps PvPBot compilable without StabShot as hard dep.
      */
     private void fireOrbitalStabReflection(ServerPlayerEntity target, ServerWorld world) {
@@ -454,19 +454,13 @@ public class CombatController {
             orbitalStrikeCooldown = ORBITAL_COOLDOWN;
             targetInWebTicks      = 0;
         } catch (Exception ignored) {
-            // StabShot not installed or reflection failed — silently skip
+            // StabShot not installed or reflection failed â€” silently skip
         }
     }
 
-    /** Returns true if StabShot mod is installed. Result is cached. */
-    private static Boolean orbitalModLoadedCache = null;
-
     private static boolean isOrbitalModLoaded() {
-        if (orbitalModLoadedCache == null) {
-            orbitalModLoadedCache = net.fabricmc.loader.api.FabricLoader
-                    .getInstance().isModLoaded("stabshot");
-        }
-        return orbitalModLoadedCache;
+        return net.fabricmc.loader.api.FabricLoader
+                .getInstance().isModLoaded("stabshot");
     }
 
 
@@ -516,12 +510,12 @@ public class CombatController {
     // FIXED:
     //  1. Timer-based drop removed. Shield now stays raised for as long as the
     //     mace threat is detected. Drops after an 8-tick grace period when the
-    //     threat clears — no more dropping at 2 blocks as timer runs out.
+    //     threat clears â€” no more dropping at 2 blocks as timer runs out.
     //  2. Velocity threshold lowered from -0.4 to -0.08 so the shield raises
     //     on the very first tick of descent, not after the player builds speed.
     //  3. Height threshold lowered from 3.0 to 1.5 blocks so close-overhead
     //     attacks also trigger the block.
-    //  4. shieldLockout no longer interferes with updateMaceBlock — the lockout
+    //  4. shieldLockout no longer interferes with updateMaceBlock â€” the lockout
     //     only delays combat attacks, while shield logic runs independently.
     // =========================================================================
 
@@ -550,7 +544,7 @@ public class CombatController {
                 bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
             }
         } else if (shielding && shieldInMainhand) {
-            // Threat gone — grace period before lowering
+            // Threat gone â€” grace period before lowering
             if (maceThreatGraceTicks > 0) {
                 maceThreatGraceTicks--;
                 bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
@@ -567,7 +561,7 @@ public class CombatController {
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         shielding        = true;
         shieldInMainhand = true;
-        // No countdown timer — threat detection owns the duration.
+        // No countdown timer â€” threat detection owns the duration.
         // shieldLockout still delays attack combos, but NOT shield logic.
         shieldLockout    = cfg.shieldLockoutTicks;
     }
@@ -679,11 +673,11 @@ public class CombatController {
 
     /**
      * BREACH_SWAP:
-     *   Step 0 — sword hit with short cooldown override for rapid mace follow-up.
-     *   Step 1 — equip breach mace, jump for crit if on ground, OR if already
+     *   Step 0 â€” sword hit with short cooldown override for rapid mace follow-up.
+     *   Step 1 â€” equip breach mace, jump for crit if on ground, OR if already
      *            falling (from wind burst / previous jump) swing immediately as
      *            a natural crit. This is the "wind burst airborne breach crit"
-     *            feature — bot was knocked up, waits for descent, swings mace.
+     *            feature â€” bot was knocked up, waits for descent, swings mace.
      */
     private void doBreachSwap(ServerPlayerEntity target) {
         switch (comboStep) {
@@ -703,18 +697,18 @@ public class CombatController {
                 boolean isOnGround = bot.getFakePlayer().isOnGround();
 
                 if (isFalling) {
-                    // Already descending — this is a natural crit, swing now
+                    // Already descending â€” this is a natural crit, swing now
                     bot.getFakePlayer().attack(target);
                     setNextAttackCooldown();
                     inventory.scheduleSwapBackToSword();
                     finishCombo();
                 } else if (isOnGround) {
-                    // On ground — jump for crit and wait for descent
+                    // On ground â€” jump for crit and wait for descent
                     movement.jumpForCrit();
                     waitingForCrit = true;
                     comboStep = 2; // wait in step 2
                 }
-                // else: still rising from wind burst — wait here until falling
+                // else: still rising from wind burst â€” wait here until falling
             }
             case 2 -> {
                 // Waiting for crit arc peak (descending)
@@ -734,7 +728,7 @@ public class CombatController {
      * Detects wind burst airborne state and opportunistically starts a
      * breach swap. Called at the top of tick() before normal combo logic.
      * When a wind charge launches the bot upward, the bot waits for the
-     * descent arc and executes sword→mace breach swap as a crit.
+     * descent arc and executes swordâ†’mace breach swap as a crit.
      */
     private void tickWindBurstBreachSwap(ServerPlayerEntity target) {
         // Only trigger if:
@@ -750,8 +744,8 @@ public class CombatController {
 
         // Switch to breach swap pattern immediately
         currentPattern = ComboPattern.BREACH_SWAP;
-        comboStep = 1; // skip step 0 (sword hit) — go straight to mace for the crit
-        // We're rising — step 1 will wait until we start falling, then swing
+        comboStep = 1; // skip step 0 (sword hit) â€” go straight to mace for the crit
+        // We're rising â€” step 1 will wait until we start falling, then swing
     }
 
     // =========================================================================
@@ -803,7 +797,7 @@ public class CombatController {
         } else {
             if (hasBreachMace) {
                 // Weighted: breach swap gets 2 slots so it fires ~33% of the time
-                // instead of 1-in-5 (20%) — makes the technique more visible
+                // instead of 1-in-5 (20%) â€” makes the technique more visible
                 ComboPattern[] p = { ComboPattern.SPRINT_HITS, ComboPattern.DOUBLE_STRAFE,
                                      ComboPattern.JUMP_RESET,  ComboPattern.SHIELD_BAIT,
                                      ComboPattern.BREACH_SWAP, ComboPattern.BREACH_SWAP };
@@ -843,10 +837,10 @@ public class CombatController {
         cobwebTrapActive       = false;
         orbitalRetreatTarget   = null;
         orbitalRetreatTimer    = 0;
-        // cobwebCooldown intentionally NOT reset — persists through stop/restart
+        // cobwebCooldown intentionally NOT reset â€” persists through stop/restart
         resetPartial();
     }
 
     public boolean isShielding()          { return shielding; }
     public String getCurrentPatternName() { return currentPattern != null ? currentPattern.name() : "NONE"; }
-}
+    }

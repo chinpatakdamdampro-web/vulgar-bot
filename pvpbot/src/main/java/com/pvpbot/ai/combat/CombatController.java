@@ -202,8 +202,17 @@ public class CombatController {
         // MIN_COMBAT_RANGE in MovementController is 1.4, so 1.4Â² = 1.96.
         // Using 1.96 here ensures the bot never tries to attack while
         // simultaneously backing away â€” which caused the inconsistent freeze.
-        double distSq    = targeting.distanceToTargetSq();
-        double minRangeSq = 1.96; // must match MIN_COMBAT_RANGE_SQ in MovementController
+        // Use horizontal distance for melee gating. Full 3D distance can be inflated by
+        // eye-height differences between fake players, which caused bot-vs-bot duels
+        // to devolve into body-pushing without swings.
+        double dx = target.getX() - fp.getX();
+        double dz = target.getZ() - fp.getZ();
+        double distSq = dx * dx + dz * dz;
+
+        // Keep the existing spacing rule for normal targets, but allow a tighter
+        // minimum when fighting another fake player so collision doesn't create a
+        // dead-zone where both bots only keep moving.
+        double minRangeSq = (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
         if (distSq < minRangeSq || distSq > maxRangeSq) return;
 

@@ -188,14 +188,13 @@ public class PvPBotEntity {
     private ServerPlayerEntity findAttacker() {
         // Use the recent attacker from Minecraft's built-in damage tracking
         var attacker = fakePlayer.getAttacker();
-        if (attacker instanceof ServerPlayerEntity sp
-                && !(sp instanceof carpet.patches.EntityPlayerMPFake)) {
+        if (attacker instanceof ServerPlayerEntity sp && sp != fakePlayer) {
             return sp;
         }
         // Try recent damage source
         var recentSource = fakePlayer.getRecentDamageSource();
         if (recentSource != null && recentSource.getAttacker() instanceof ServerPlayerEntity sp
-                && !(sp instanceof carpet.patches.EntityPlayerMPFake)) {
+                && sp != fakePlayer) {
             return sp;
         }
         return null;
@@ -207,7 +206,7 @@ public class PvPBotEntity {
         double nearestDistSq = Double.MAX_VALUE;
         for (ServerPlayerEntity p : fakePlayer.getServerWorld().getPlayers()) {
             if (p == fakePlayer) continue;
-            if (p instanceof carpet.patches.EntityPlayerMPFake) continue;
+            // Include fake players too so revenge can chain into bot-vs-bot fights.
             double d = fakePlayer.squaredDistanceTo(p);
             if (d < nearestDistSq) { nearestDistSq = d; nearest = p; }
         }

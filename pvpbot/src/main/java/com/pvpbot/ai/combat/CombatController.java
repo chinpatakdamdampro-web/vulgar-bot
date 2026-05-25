@@ -433,6 +433,10 @@ public class CombatController {
 
     private void tickOrbitalStrike(ServerPlayerEntity target) {
         if (orbitalStrikeCooldown > 0) orbitalStrikeCooldown--;
+        if (cfg.difficulty != BotConfig.Difficulty.ULTRA_HARD) {
+            targetInWebTicks = 0;
+            return;
+        }
         if (!isOrbitalModLoaded()) return;
 
         BlockPos feetPos  = target.getBlockPos();

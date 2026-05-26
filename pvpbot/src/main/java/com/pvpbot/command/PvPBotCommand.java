@@ -175,7 +175,7 @@ public class PvPBotCommand {
         send(ctx, "§e/pb diff §f<bot> <easy|medium|hard|ultrahard>");
         send(ctx, "§7  easy§7=slow  §emedium§7=default  §chard§7=fast  §4ultrahard§7=Str3");
         send(ctx, "§6§l── Combat Mode ──");
-        send(ctx, "§e/pb mode §f<bot> <crit|combo|smp> §7Set combat style");
+        send(ctx, "§e/pb mode §f<bot> <crit|combo|smp> §7Set combat style (updated AI tuning)");
         send(ctx, "§6§l── Global Settings ──");
         send(ctx, "§e/pb settings §fRevenge <true|false>  §7Revenge for ALL bots + save");
         send(ctx, "§e/pb config setdefault §f<diff>       §7Default difficulty for new spawns");

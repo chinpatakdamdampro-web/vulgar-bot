@@ -50,6 +50,13 @@ public class CombatController {
     // Attack timing
     private int attackCooldown = 0;
 
+    // Out-of-range recovery: prevents stale combo states
+    private int outOfRangeTicks = 0;
+    private static final int OUT_OF_RANGE_RESET_TICKS = 12;
+
+    // Anti-whiff retry: tiny delay before abandoning a swing
+    private int pendingRetryTicks = 0;
+
     // Sprint reset (w-tap)
     private int sprintResetTimer = 0;
 
@@ -214,7 +221,18 @@ public class CombatController {
         // dead-zone where both bots only keep moving.
         double minRangeSq = (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
-        if (distSq < minRangeSq || distSq > maxRangeSq) return;
+        if (distSq < minRangeSq || distSq > maxRangeSq) {
+            outOfRangeTicks++;
+            if (outOfRangeTicks >= OUT_OF_RANGE_RESET_TICKS) {
+                comboStep = 0;
+                waitingForCrit = false;
+                pendingRetryTicks = 0;
+                pickNewPattern();
+                outOfRangeTicks = 0;
+            }
+            return;
+        }
+        outOfRangeTicks = 0;
 
         // Weapon cooldown check
         if (fp.getAttackCooldownProgress(0) < 0.9f) return;
@@ -803,8 +821,25 @@ public class CombatController {
         return true;
     }
 
+
+    private boolean tryAttackTargetWithRetry(ServerPlayerEntity target) {
+        if (pendingRetryTicks > 0) {
+            pendingRetryTicks--;
+            return false;
+        }
+
+        if (!isWithinMeleeAttackRange(target)) {
+            // Schedule a short retry to reduce whiffs when target is barely out of reach
+            pendingRetryTicks = 1 + rng.nextInt(2); // 1-2 ticks
+            return false;
+        }
+
+        pendingRetryTicks = 0;
+        return tryAttackTarget(target);
+    }
+
     private void swingAt(ServerPlayerEntity target) {
-        if (!tryAttackTarget(target)) return;
+        if (!tryAttackTargetWithRetry(target)) return;
     }
 
     private void queueJumpCrit() {
@@ -821,6 +856,8 @@ public class CombatController {
 
     private void finishCombo() {
         comboStep      = 0;
+        outOfRangeTicks = 0;
+        pendingRetryTicks = 0;
         waitingForCrit = false;
         if (rng.nextInt(100) < cfg.sprintResetChancePercent) {
             movement.sprintReset();

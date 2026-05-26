@@ -523,8 +523,7 @@ public class CombatController {
         if (!hasAxe) return;
 
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
-        bot.getFakePlayer().attack(target);
-        setNextAttackCooldown();
+        if (!tryAttackTarget(target)) return;
 
         axeSwapCooldown = 20;
         inventory.scheduleSwapBackToSword();
@@ -713,7 +712,7 @@ public class CombatController {
             case 0 -> {
                 inventory.equipBestWeapon(false);
                 bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
-                bot.getFakePlayer().attack(target);
+                if (!tryAttackTarget(target)) { finishCombo(); return; }
                 attackCooldown = 2 + rng.nextInt(2);
                 breachSwapStep1Timeout = 0;
                 comboStep = 1;
@@ -730,8 +729,7 @@ public class CombatController {
 
                 if (isFalling || timedOut) {
                     // Falling naturally = crit. Timed out = force swing anyway.
-                    bot.getFakePlayer().attack(target);
-                    setNextAttackCooldown();
+                    if (!tryAttackTarget(target)) { finishCombo(); return; }
                     inventory.scheduleSwapBackToSword();
                     breachSwapStep1Timeout = 0;
                     finishCombo();
@@ -748,8 +746,7 @@ public class CombatController {
                 if (bot.getFakePlayer().getVelocity().y < -0.05) {
                     waitingForCrit = false;
                     bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
-                    bot.getFakePlayer().attack(target);
-                    setNextAttackCooldown();
+                    if (!tryAttackTarget(target)) { finishCombo(); return; }
                     inventory.scheduleSwapBackToSword();
                     finishCombo();
                 }
@@ -785,10 +782,29 @@ public class CombatController {
     // Helpers
     // =========================================================================
 
-    private void swingAt(ServerPlayerEntity target) {
-        if (shielding) return;
+    // Strict melee reach guard to prevent impossible hits while targets are far
+    // above/below or otherwise outside vanilla-like melee distance.
+    private boolean isWithinMeleeAttackRange(ServerPlayerEntity target) {
+        EntityPlayerMPFake fp = bot.getFakePlayer();
+        double dx = target.getX() - fp.getX();
+        double dy = target.getY() - fp.getY();
+        double dz = target.getZ() - fp.getZ();
+        double distSq = dx * dx + dy * dy + dz * dz;
+        double reach = cfg.attackReach;
+        double maxReachSq = reach * reach;
+        return distSq <= maxReachSq;
+    }
+
+    private boolean tryAttackTarget(ServerPlayerEntity target) {
+        if (shielding) return false;
+        if (!isWithinMeleeAttackRange(target)) return false;
         bot.getFakePlayer().attack(target);
         setNextAttackCooldown();
+        return true;
+    }
+
+    private void swingAt(ServerPlayerEntity target) {
+        if (!tryAttackTarget(target)) return;
     }
 
     private void queueJumpCrit() {

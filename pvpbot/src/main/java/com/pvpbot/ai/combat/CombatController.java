@@ -858,6 +858,8 @@ public class CombatController {
         comboStep      = 0;
         outOfRangeTicks = 0;
         pendingRetryTicks = 0;
+        outOfRangeTicks = 0;
+        pendingRetryTicks = 0;
         waitingForCrit = false;
         if (rng.nextInt(100) < cfg.sprintResetChancePercent) {
             movement.sprintReset();

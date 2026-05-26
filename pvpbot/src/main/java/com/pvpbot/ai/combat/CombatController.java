@@ -146,6 +146,9 @@ public class CombatController {
             return;
         }
 
+        // Combat-engine hook (v2 rollout safety). Currently no-op for behavior parity.
+        tickCombatEngineHook();
+
         // Cobweb cooldown countdown
         if (cobwebCooldown > 0) cobwebCooldown--;
 
@@ -252,6 +255,17 @@ public class CombatController {
         // Execute combo pattern
         executeComboStep(target);
     }
+
+
+    private void tickCombatEngineHook() {
+        // Intentionally conservative:
+        // keep full legacy behavior even if V2 is selected until V2 internals are fully implemented.
+        // This prevents gameplay regressions during rollout.
+        if (cfg.combatEngine == BotConfig.CombatEngine.V2) {
+            // future: predictive aiming/spacing modules
+        }
+    }
+
 
     // =========================================================================
     // Retreat tick

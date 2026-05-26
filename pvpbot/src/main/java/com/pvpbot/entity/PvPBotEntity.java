@@ -245,6 +245,11 @@ public class PvPBotEntity {
      * Applies a new difficulty to this bot at runtime.
      * Reconfigures all BotConfig values and immediately updates passive effects.
      */
+
+    public void setCombatEngine(BotConfig.CombatEngine engine) {
+        config.combatEngine = engine;
+    }
+
     public void setDifficulty(BotConfig.Difficulty difficulty) {
         config.difficulty = difficulty;
         config.applyDifficulty();

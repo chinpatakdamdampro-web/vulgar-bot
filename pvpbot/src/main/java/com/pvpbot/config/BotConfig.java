@@ -82,6 +82,10 @@ public class BotConfig {
     /** Current combat mode — affects crit chance, strafe, accuracy. */
     public BotMode mode = BotMode.COMBO;
 
+    // Safe rollout: keep legacy combat by default, allow opt-in v2.
+    public enum CombatEngine { LEGACY, V2 }
+    public CombatEngine combatEngine = CombatEngine.LEGACY;
+
     /** Current difficulty — affects stats AND applies passive effects. */
     public Difficulty difficulty = Difficulty.MEDIUM;
 

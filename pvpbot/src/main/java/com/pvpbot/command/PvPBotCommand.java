@@ -102,6 +102,12 @@ public class PvPBotCommand {
                     .then(literal("combo").executes(ctx -> execMode(ctx, "combo")))
                     .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))))
 
+            // /pb ai <bot> <legacy|v2>
+            .then(literal("ai")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("legacy").executes(ctx -> execAiEngine(ctx, "legacy")))
+                    .then(literal("v2")    .executes(ctx -> execAiEngine(ctx, "v2")))))
+
             // /pb config — persistent server config
             .then(literal("config")
                 .then(literal("setdefault")
@@ -551,6 +557,28 @@ public class PvPBotCommand {
     // =========================================================================
     // /pb diff <bot> <easy|medium|hard|ultrahard>
     // =========================================================================
+
+
+    private static int execAiEngine(CommandContext<ServerCommandSource> ctx, String engineName) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+
+        BotConfig.CombatEngine engine = switch (engineName.toLowerCase()) {
+            case "v2" -> BotConfig.CombatEngine.V2;
+            default   -> BotConfig.CombatEngine.LEGACY;
+        };
+
+        bot.setCombatEngine(engine);
+        sendSuccess(ctx, "§f" + botName + "§a combat engine → §f" + engine.name() + " §7(safe mode)");
+        if (engine == BotConfig.CombatEngine.LEGACY) {
+            send(ctx, "§7Legacy engine: maximum stability.");
+        } else {
+            send(ctx, "§7V2 engine selected. Currently compatibility mode (no risky behavior override yet).");
+        }
+        return 1;
+    }
+
 
     private static int execDiff(CommandContext<ServerCommandSource> ctx, String diffName) {
         String botName = StringArgumentType.getString(ctx, "botName");

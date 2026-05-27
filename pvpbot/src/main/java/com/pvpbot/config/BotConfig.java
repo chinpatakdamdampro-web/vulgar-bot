@@ -82,6 +82,9 @@ public class BotConfig {
     /** Current combat mode — affects crit chance, strafe, accuracy. */
     public BotMode mode = BotMode.COMBO;
 
+    /** Movement safety profile — LEGACY keeps old behavior, SAFE avoids holes/ledges. */
+    public PathMode pathMode = PathMode.SAFE;
+
     // Safe rollout: keep legacy combat by default, allow opt-in v2.
     public enum CombatEngine { LEGACY, V2 }
     public CombatEngine combatEngine = CombatEngine.LEGACY;
@@ -130,6 +133,11 @@ public class BotConfig {
         COMBO,
         /** Less strafe, shield-predict hits, more deliberate. */
         SMP
+    }
+
+    public enum PathMode {
+        LEGACY,
+        SAFE
     }
 
     // -------------------------------------------------------------------------

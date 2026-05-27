@@ -32,6 +32,7 @@ public class MovementController {
 
     private static final double WALK_SPEED   = 0.15;
     private static final double SPRINT_SPEED = 0.26;
+    private static final int SAFE_DROP_LIMIT = 2;
 
     public MovementController(PvPBotEntity bot) {
         this.bot = bot;
@@ -77,9 +78,7 @@ public class MovementController {
         boolean shouldSprint = followMode ? (dist > FOLLOW_WALK_DIST) : false;
         double speed = shouldSprint ? SPRINT_SPEED : WALK_SPEED;
 
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(dx * speed, vel.y, dz * speed);
-        setSprinting(shouldSprint);
+        if (!applySafeHorizontalVelocity(dx, dz, speed, shouldSprint)) return;
 
         // FIX Bug 3: jump over obstacles in the path
         tryJumpOverObstacle(fp, dx, dz);
@@ -108,9 +107,7 @@ public class MovementController {
         if (len < 0.001) return;
         dx /= len; dz /= len;
 
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(dx * SPRINT_SPEED, vel.y, dz * SPRINT_SPEED);
-        setSprinting(true);
+        if (!applySafeHorizontalVelocity(dx, dz, SPRINT_SPEED, true)) return;
         tryJumpOverObstacle(fp, dx, dz);
     }
 
@@ -204,9 +201,7 @@ public class MovementController {
         dx /= len; dz /= len;
 
         double speed = sprint ? SPRINT_SPEED : WALK_SPEED;
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(dx * speed, vel.y, dz * speed);
-        setSprinting(sprint);
+        if (!applySafeHorizontalVelocity(dx, dz, speed, sprint)) return;
         tryJumpOverObstacle(fp, dx, dz);
     }
 
@@ -219,11 +214,9 @@ public class MovementController {
             double angle = rng.nextDouble() * Math.PI * 2;
             dx = Math.cos(angle); dz = Math.sin(angle);
         } else { dx /= len; dz /= len; }
-        Vec3d vel = fp.getVelocity();
         double strafeX = -dz * (strafeDir != 0 ? strafeDir : 1) * 0.08;
         double strafeZ  =  dx * (strafeDir != 0 ? strafeDir : 1) * 0.08;
-        fp.setVelocity(dx * WALK_SPEED + strafeX, vel.y, dz * WALK_SPEED + strafeZ);
-        setSprinting(false);
+        if (!applySafeHorizontalVelocity(dx + strafeX, dz + strafeZ, WALK_SPEED, false)) return;
     }
 
     private void maybeStrafe() {
@@ -257,9 +250,7 @@ public class MovementController {
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len < 0.001) { dx = rng.nextDouble() * 2 - 1; dz = rng.nextDouble() * 2 - 1; len = 1; }
         dx /= len; dz /= len;
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(dx * SPRINT_SPEED, vel.y, dz * SPRINT_SPEED);
-        setSprinting(true);
+        if (!applySafeHorizontalVelocity(dx, dz, SPRINT_SPEED, true)) return;
         float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
         fp.setHeadYaw(yaw); fp.setBodyYaw(yaw); fp.setYaw(yaw);
         fp.setPitch(0f);
@@ -339,6 +330,56 @@ public class MovementController {
         double sz = -Math.cos(radYaw) * 0.12;
         Vec3d vel = fp.getVelocity();
         fp.setVelocity(vel.x + sx, vel.y, vel.z + sz);
+    }
+
+
+    private boolean applySafeHorizontalVelocity(double dirX, double dirZ, double speed, boolean sprint) {
+        EntityPlayerMPFake fp = bot.getFakePlayer();
+        double len = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        if (len < 0.001) return false;
+        double nx = dirX / len;
+        double nz = dirZ / len;
+
+        if (bot.getConfig().pathMode == com.pvpbot.config.BotConfig.PathMode.SAFE
+                && !isSafeGroundAhead(fp, nx, nz)) {
+            setSprinting(false);
+            Vec3d vel = fp.getVelocity();
+            fp.setVelocity(vel.x * 0.2, vel.y, vel.z * 0.2);
+            return false;
+        }
+
+        Vec3d vel = fp.getVelocity();
+        fp.setVelocity(nx * speed, vel.y, nz * speed);
+        setSprinting(sprint);
+        return true;
+    }
+
+    private boolean isSafeGroundAhead(EntityPlayerMPFake fp, double dx, double dz) {
+        var world = fp.getWorld();
+        int footY = (int) Math.floor(fp.getY());
+        double[] probes = {0.75, 1.1};
+        for (double d : probes) {
+            int x = (int) Math.floor(fp.getX() + dx * d);
+            int z = (int) Math.floor(fp.getZ() + dz * d);
+
+            BlockPos feet = new BlockPos(x, footY, z);
+            BlockPos head = feet.up();
+            if (!world.getBlockState(feet).isAir() || !world.getBlockState(head).isAir()) {
+                continue;
+            }
+
+            boolean foundSupport = false;
+            for (int drop = 1; drop <= SAFE_DROP_LIMIT; drop++) {
+                BlockPos below = feet.down(drop);
+                BlockState belowState = world.getBlockState(below);
+                if (!belowState.isAir() && belowState.isSolidBlock(world, below)) {
+                    foundSupport = true;
+                    break;
+                }
+            }
+            if (!foundSupport) return false;
+        }
+        return true;
     }
 
     private double horizontalSpeed(EntityPlayerMPFake fp) {

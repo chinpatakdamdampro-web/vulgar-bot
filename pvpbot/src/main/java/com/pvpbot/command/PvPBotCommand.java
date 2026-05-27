@@ -101,6 +101,10 @@ public class PvPBotCommand {
                     .then(literal("crit") .executes(ctx -> execMode(ctx, "crit")))
                     .then(literal("combo").executes(ctx -> execMode(ctx, "combo")))
                     .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))))
+            .then(literal("path")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("safe").executes(ctx -> execPath(ctx, "safe")))
+                    .then(literal("legacy").executes(ctx -> execPath(ctx, "legacy")))))
 
             // /pb ai <bot> <legacy|v2>
             .then(literal("ai")
@@ -517,6 +521,25 @@ public class PvPBotCommand {
         }
         send(ctx, "§7Crit: §f" + bot.getConfig().critChancePercent
                 + "% §7| Cooldown: §f" + bot.getConfig().attackCooldownTicks + " ticks");
+        return 1;
+    }
+
+    private static int execPath(CommandContext<ServerCommandSource> ctx, String pathName) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+
+        BotConfig.PathMode mode = switch (pathName.toLowerCase()) {
+            case "legacy" -> BotConfig.PathMode.LEGACY;
+            default -> BotConfig.PathMode.SAFE;
+        };
+        bot.getConfig().pathMode = mode;
+
+        sendSuccess(ctx, "§f" + botName + "§a path mode → §f" + mode.name());
+        switch (mode) {
+            case SAFE -> send(ctx, "§7SAFE: avoids ledges/holes while moving and retreating.");
+            case LEGACY -> send(ctx, "§7LEGACY: original aggressive movement without ledge checks.");
+        }
         return 1;
     }
 

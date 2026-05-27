@@ -225,18 +225,29 @@ public class PvPBotEntity {
      */
     private void applyDifficultyEffects() {
         if (config.difficulty == BotConfig.Difficulty.ULTRA_HARD) {
-            var existing = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
+            var str = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
+            var res = fakePlayer.getStatusEffect(StatusEffects.RESISTANCE);
+
             // Refresh every 60 ticks (3 seconds) when duration drops below 100 ticks (5s)
-            if (existing == null || existing.getDuration() < 100) {
-                // amplifier 2 = Strength III (0-indexed: 0=I, 1=II, 2=III)
+            if (str == null || str.getDuration() < 100) {
+                // amplifier 2 = Strength III
                 fakePlayer.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.STRENGTH, 200, 2, false, false, false)
                 );
             }
+            if (res == null || res.getDuration() < 100) {
+                // amplifier 0 = Resistance I
+                fakePlayer.addStatusEffect(
+                    new StatusEffectInstance(StatusEffects.RESISTANCE, 200, 0, false, false, false)
+                );
+            }
         } else {
-            // Remove any lingering Strength from a previous Ultra Hard session
+            // Remove lingering Ultra Hard effects if difficulty changed
             if (fakePlayer.hasStatusEffect(StatusEffects.STRENGTH)) {
                 fakePlayer.removeStatusEffect(StatusEffects.STRENGTH);
+            }
+            if (fakePlayer.hasStatusEffect(StatusEffects.RESISTANCE)) {
+                fakePlayer.removeStatusEffect(StatusEffects.RESISTANCE);
             }
         }
     }
@@ -280,6 +291,9 @@ public class PvPBotEntity {
         // Remove Ultra Hard strength effect when bot is stopped
         if (fakePlayer.hasStatusEffect(StatusEffects.STRENGTH)) {
             fakePlayer.removeStatusEffect(StatusEffects.STRENGTH);
+        }
+        if (fakePlayer.hasStatusEffect(StatusEffects.RESISTANCE)) {
+            fakePlayer.removeStatusEffect(StatusEffects.RESISTANCE);
         }
         setState(BotState.IDLE);
     }

@@ -369,6 +369,26 @@ public class CombatController {
     private static final int COBWEB_COOLDOWN_BREACH       = 400; // 20s â€” other difficulties
     private static final int ORBITAL_TRIGGER_CHANCE_PCT   = 40;  // % chance per check
 
+
+    private boolean botStandingInCobweb() {
+        var world = (ServerWorld) bot.getFakePlayer().getWorld();
+        BlockPos feet = bot.getFakePlayer().getBlockPos();
+        return world.getBlockState(feet).isOf(Blocks.COBWEB)
+                || world.getBlockState(feet.up()).isOf(Blocks.COBWEB);
+    }
+
+    private int nearbyBotCount(double radius) {
+        EntityPlayerMPFake self = bot.getFakePlayer();
+        double r2 = radius * radius;
+        int c = 0;
+        for (ServerPlayerEntity p : self.getServerWorld().getPlayers()) {
+            if (!(p instanceof EntityPlayerMPFake)) continue;
+            if (p == self) continue;
+            if (self.squaredDistanceTo(p) <= r2) c++;
+        }
+        return c;
+    }
+
     private void tickCobwebTrap(ServerPlayerEntity target) {
         if (cobwebCooldown > 0) return;
         if (!inventory.hasCobwebs(2)) return;
@@ -378,9 +398,17 @@ public class CombatController {
             return;
         }
 
+        // avoid placing new trap if bot is already tangled in web
+        if (botStandingInCobweb()) return;
+
         // Only trigger when target is within 4 blocks
         double distSq = targeting.distanceToTargetSq();
         if (distSq > 16.0) return;
+
+        // Scale trap chance down when many bots are nearby to prevent web spam
+        int nearbyBots = nearbyBotCount(20.0);
+        int triggerChancePct = nearbyBots >= 5 ? 35 : 100;
+        if (rng.nextInt(100) >= triggerChancePct) return;
 
         // Place cobweb bubble at target's feet and one block up
         var targetFeet = target.getBlockPos();
@@ -412,7 +440,9 @@ public class CombatController {
             // Player is stuck â€” guaranteed crit opportunity
             if (inventory.hasBreachMace()) {
                 currentPattern = ComboPattern.BREACH_SWAP;
-                comboStep      = 0; // full sequence: sword hit then mace crit
+                comboStep      = 1; // skip opener and go straight to crit setup
+                breachSwapStep1Timeout = 0;
+                waitingForCrit = false;
             }
             cobwebCooldown = COBWEB_COOLDOWN_BREACH;
         }
@@ -588,9 +618,11 @@ public class CombatController {
         // Threat active when:
         //  - Target has mace, is at least 1.5 blocks above, and has started falling
         //  - OR target is falling fast (any weapon) from 1.5+ blocks above
+        // Keep shield up aggressively while incoming falling threat exists
+        // widened vertical window helps prevent free mace hits when target descends fast
         boolean threatActive =
-                (hasMace   && heightDiff > 1.5 && targetVelY < -0.08)
-                || (heightDiff > 1.5 && targetVelY < -0.3);
+                (hasMace   && heightDiff > 1.2 && targetVelY < -0.04)
+                || (heightDiff > 1.2 && targetVelY < -0.22);
 
         if (threatActive) {
             maceThreatGraceTicks = MACE_THREAT_GRACE;
@@ -758,6 +790,7 @@ public class CombatController {
                 boolean isFalling  = bot.getFakePlayer().getVelocity().y < -0.05;
                 boolean isOnGround = bot.getFakePlayer().isOnGround();
                 boolean timedOut   = breachSwapStep1Timeout >= BREACH_SWAP_TIMEOUT;
+                boolean selfWebbed = botStandingInCobweb();
 
                 if (isFalling || timedOut) {
                     // Falling naturally = crit. Timed out = force swing anyway.
@@ -766,6 +799,14 @@ public class CombatController {
                     breachSwapStep1Timeout = 0;
                     finishCombo();
                 } else if (isOnGround) {
+                    // If we are webbed ourselves avoid jump-crit dead state
+                    if (selfWebbed) {
+                        if (!tryAttackTarget(target)) { finishCombo(); return; }
+                        inventory.scheduleSwapBackToSword();
+                        breachSwapStep1Timeout = 0;
+                        finishCombo();
+                        return;
+                    }
                     movement.jumpForCrit();
                     waitingForCrit = true;
                     breachSwapStep1Timeout = 0;
@@ -822,7 +863,16 @@ public class CombatController {
         double dy = target.getY() - fp.getY();
         double dz = target.getZ() - fp.getZ();
         double distSq = dx * dx + dy * dy + dz * dz;
+
         double reach = cfg.attackReach;
+        var world = (ServerWorld) fp.getWorld();
+        BlockPos tFeet = target.getBlockPos();
+        boolean targetWebbed = world.getBlockState(tFeet).isOf(Blocks.COBWEB)
+                || world.getBlockState(tFeet.up()).isOf(Blocks.COBWEB);
+
+        // small bonus only when target is trapped in web
+        if (targetWebbed) reach += 0.65;
+
         double maxReachSq = reach * reach;
         return distSq <= maxReachSq;
     }

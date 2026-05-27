@@ -18,6 +18,9 @@ public class MovementController {
     private int strafeTimer = 0;
     private boolean sprinting       = false;
     private boolean jumpCritPending = false;
+    private int blockedTicks = 0;
+    private int stuckTicks = 0;
+    private Vec3d lastPosForStuckCheck = null;
 
     private int knockbackSuppressTicks = 0;
     private static final int KNOCKBACK_SUPPRESS_TICKS = 6;
@@ -46,6 +49,7 @@ public class MovementController {
 
     public void tick() {
         if (knockbackSuppressTicks > 0) knockbackSuppressTicks--;
+        tickStuckRecovery(bot.getFakePlayer());
     }
 
     // -------------------------------------------------------------------------
@@ -78,7 +82,7 @@ public class MovementController {
         boolean shouldSprint = followMode ? (dist > FOLLOW_WALK_DIST) : false;
         double speed = shouldSprint ? SPRINT_SPEED : WALK_SPEED;
 
-        if (!applySafeHorizontalVelocity(dx, dz, speed, shouldSprint)) return;
+        if (!applyVelocityOrSteer(fp, dx, dz, speed, shouldSprint)) return;
 
         // FIX Bug 3: jump over obstacles in the path
         tryJumpOverObstacle(fp, dx, dz);
@@ -107,7 +111,7 @@ public class MovementController {
         if (len < 0.001) return;
         dx /= len; dz /= len;
 
-        if (!applySafeHorizontalVelocity(dx, dz, SPRINT_SPEED, true)) return;
+        if (!applyVelocityOrSteer(fp, dx, dz, SPRINT_SPEED, true)) return;
         tryJumpOverObstacle(fp, dx, dz);
     }
 
@@ -201,7 +205,7 @@ public class MovementController {
         dx /= len; dz /= len;
 
         double speed = sprint ? SPRINT_SPEED : WALK_SPEED;
-        if (!applySafeHorizontalVelocity(dx, dz, speed, sprint)) return;
+        if (!applyVelocityOrSteer(fp, dx, dz, speed, sprint)) return;
         tryJumpOverObstacle(fp, dx, dz);
     }
 
@@ -216,7 +220,7 @@ public class MovementController {
         } else { dx /= len; dz /= len; }
         double strafeX = -dz * (strafeDir != 0 ? strafeDir : 1) * 0.08;
         double strafeZ  =  dx * (strafeDir != 0 ? strafeDir : 1) * 0.08;
-        if (!applySafeHorizontalVelocity(dx + strafeX, dz + strafeZ, WALK_SPEED, false)) return;
+        if (!applyVelocityOrSteer(fp, dx + strafeX, dz + strafeZ, WALK_SPEED, false)) return;
     }
 
     private void maybeStrafe() {
@@ -250,7 +254,7 @@ public class MovementController {
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len < 0.001) { dx = rng.nextDouble() * 2 - 1; dz = rng.nextDouble() * 2 - 1; len = 1; }
         dx /= len; dz /= len;
-        if (!applySafeHorizontalVelocity(dx, dz, SPRINT_SPEED, true)) return;
+        if (!applyVelocityOrSteer(fp, dx, dz, SPRINT_SPEED, true)) return;
         float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
         fp.setHeadYaw(yaw); fp.setBodyYaw(yaw); fp.setYaw(yaw);
         fp.setPitch(0f);
@@ -381,6 +385,98 @@ public class MovementController {
         }
         return true;
     }
+
+
+    private boolean isTraversableAt(EntityPlayerMPFake fp, int x, int y, int z) {
+        var world = fp.getWorld();
+        BlockPos feet = new BlockPos(x, y, z);
+        BlockPos head = feet.up();
+        return world.getBlockState(feet).isAir() && world.getBlockState(head).isAir();
+    }
+
+    private boolean applyVelocityOrSteer(EntityPlayerMPFake fp, double dx, double dz, double speed, boolean sprint) {
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.001) return false;
+        double nx = dx / len;
+        double nz = dz / len;
+
+        if (tryMoveDirection(fp, nx, nz, speed, sprint)) return true;
+
+        // steer left/right around wall/tree
+        double leftX = -nz, leftZ = nx;
+        double rightX = nz, rightZ = -nx;
+
+        // bias alternates by blockedTicks so it doesn't always choose same side
+        boolean leftFirst = (blockedTicks % 2 == 0);
+
+        if (leftFirst) {
+            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * leftX, 0.75 * nz + 0.65 * leftZ, speed, sprint)) return true;
+            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * rightX, 0.75 * nz + 0.65 * rightZ, speed, sprint)) return true;
+        } else {
+            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * rightX, 0.75 * nz + 0.65 * rightZ, speed, sprint)) return true;
+            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * leftX, 0.75 * nz + 0.65 * leftZ, speed, sprint)) return true;
+        }
+
+        // fallback: pure strafe sidestep if front is blocked
+        if (tryMoveDirection(fp, leftX, leftZ, WALK_SPEED, false)) return true;
+        if (tryMoveDirection(fp, rightX, rightZ, WALK_SPEED, false)) return true;
+
+        // fully blocked
+        setSprinting(false);
+        Vec3d vel = fp.getVelocity();
+        fp.setVelocity(vel.x * 0.2, vel.y, vel.z * 0.2);
+        blockedTicks++;
+        return false;
+    }
+
+    private boolean tryMoveDirection(EntityPlayerMPFake fp, double dx, double dz, double speed, boolean sprint) {
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.001) return false;
+        double nx = dx / len;
+        double nz = dz / len;
+
+        int y = (int) Math.floor(fp.getY());
+        int x1 = (int) Math.floor(fp.getX() + nx * 0.85);
+        int z1 = (int) Math.floor(fp.getZ() + nz * 0.85);
+
+        // avoid walking into solid wall/tree
+        if (!isTraversableAt(fp, x1, y, z1)) return false;
+
+        // keep SAFE drop behavior
+        if (bot.getConfig().pathMode == com.pvpbot.config.BotConfig.PathMode.SAFE
+                && !isSafeGroundAhead(fp, nx, nz)) return false;
+
+        Vec3d vel = fp.getVelocity();
+        fp.setVelocity(nx * speed, vel.y, nz * speed);
+        setSprinting(sprint);
+        blockedTicks = 0;
+        return true;
+    }
+
+    private void tickStuckRecovery(EntityPlayerMPFake fp) {
+        Vec3d pos = fp.getPos();
+        if (lastPosForStuckCheck == null) {
+            lastPosForStuckCheck = pos;
+            return;
+        }
+        double d2 = pos.squaredDistanceTo(lastPosForStuckCheck);
+        lastPosForStuckCheck = pos;
+
+        if (d2 < 0.01 && horizontalSpeed(fp) < 0.05) {
+            stuckTicks++;
+            if (stuckTicks > 14) {
+                // unstuck nudge + optional jump
+                double ang = rng.nextDouble() * Math.PI * 2.0;
+                Vec3d vel = fp.getVelocity();
+                fp.setVelocity(Math.cos(ang) * 0.16, vel.y, Math.sin(ang) * 0.16);
+                if (fp.isOnGround()) fp.setVelocity(fp.getVelocity().x, 0.42, fp.getVelocity().z);
+                stuckTicks = 0;
+            }
+        } else {
+            stuckTicks = 0;
+        }
+    }
+
 
     private double horizontalSpeed(EntityPlayerMPFake fp) {
         var vel = fp.getVelocity();

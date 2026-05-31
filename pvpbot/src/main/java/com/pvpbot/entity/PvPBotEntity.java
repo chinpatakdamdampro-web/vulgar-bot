@@ -228,40 +228,23 @@ public class PvPBotEntity {
      */
     private void applyDifficultyEffects() {
         if (config.difficulty == BotConfig.Difficulty.ULTRA_HARD) {
-<<<<<<< ours
-            var str = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
-            var res = fakePlayer.getStatusEffect(StatusEffects.RESISTANCE);
-
-            // Refresh every 60 ticks (3 seconds) when duration drops below 100 ticks (5s)
-            if (str == null || str.getDuration() < 100) {
-                // amplifier 2 = Strength III
-=======
             var strength = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
             var resistance = fakePlayer.getStatusEffect(StatusEffects.RESISTANCE);
             // Refresh every 60 ticks (3 seconds) when duration drops below 100 ticks (5s)
             if (strength == null || strength.getDuration() < 100) {
                 // amplifier 2 = Strength III (0-indexed: 0=I, 1=II, 2=III)
->>>>>>> theirs
                 fakePlayer.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.STRENGTH, 200, 2, false, false, false)
                 );
             }
-<<<<<<< ours
-            if (res == null || res.getDuration() < 100) {
-=======
             if (resistance == null || resistance.getDuration() < 100) {
->>>>>>> theirs
                 // amplifier 0 = Resistance I
                 fakePlayer.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.RESISTANCE, 200, 0, false, false, false)
                 );
             }
         } else {
-<<<<<<< ours
-            // Remove lingering Ultra Hard effects if difficulty changed
-=======
             // Remove any lingering Ultra Hard effects from a previous session
->>>>>>> theirs
             if (fakePlayer.hasStatusEffect(StatusEffects.STRENGTH)) {
                 fakePlayer.removeStatusEffect(StatusEffects.STRENGTH);
             }

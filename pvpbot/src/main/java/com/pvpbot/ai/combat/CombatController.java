@@ -444,12 +444,8 @@ public class CombatController {
             // Player is stuck â€” guaranteed crit opportunity
             if (inventory.hasBreachMace()) {
                 currentPattern = ComboPattern.BREACH_SWAP;
-<<<<<<< ours
-                comboStep      = 1; // skip opener and go straight to crit setup
-=======
                 comboStep      = 1; // target is webbed: go straight to mace crit setup
                 attackCooldown = 0;
->>>>>>> theirs
                 breachSwapStep1Timeout = 0;
                 waitingForCrit = false;
             }
@@ -821,12 +817,8 @@ public class CombatController {
                 boolean timedOut   = breachSwapStep1Timeout >= BREACH_SWAP_TIMEOUT;
                 boolean selfWebbed = botStandingInCobweb();
 
-<<<<<<< ours
                 if (isFalling || timedOut) {
                     // Falling naturally = crit. Timed out = force swing anyway.
-=======
-                if (isFalling) {
->>>>>>> theirs
                     if (!tryAttackTarget(target)) { finishCombo(); return; }
                     inventory.scheduleSwapBackToSword();
                     breachSwapStep1Timeout = 0;
@@ -899,8 +891,6 @@ public class CombatController {
     // Helpers
     // =========================================================================
 
-<<<<<<< ours
-=======
     private boolean isTargetInCobweb(ServerPlayerEntity target) {
         ServerWorld world = (ServerWorld) bot.getFakePlayer().getWorld();
         BlockPos feet = target.getBlockPos();
@@ -908,7 +898,7 @@ public class CombatController {
                 || world.getBlockState(feet.up()).isOf(Blocks.COBWEB);
     }
 
->>>>>>> theirs
+
     // Strict melee reach guard to prevent impossible hits while targets are far
     // above/below or otherwise outside vanilla-like melee distance.
     private boolean isWithinMeleeAttackRange(ServerPlayerEntity target) {
@@ -917,23 +907,10 @@ public class CombatController {
         double dy = target.getY() - fp.getY();
         double dz = target.getZ() - fp.getZ();
         double distSq = dx * dx + dy * dy + dz * dz;
-<<<<<<< ours
-
-        double reach = cfg.attackReach;
-        var world = (ServerWorld) fp.getWorld();
-        BlockPos tFeet = target.getBlockPos();
-        boolean targetWebbed = world.getBlockState(tFeet).isOf(Blocks.COBWEB)
-                || world.getBlockState(tFeet.up()).isOf(Blocks.COBWEB);
-
-        // small bonus only when target is trapped in web
-        if (targetWebbed) reach += 0.65;
-
-=======
         double reach = cfg.attackReach;
         if (isTargetInCobweb(target) && Math.abs(dy) < 2.75) {
             reach += 0.35;
         }
->>>>>>> theirs
         double maxReachSq = reach * reach;
         return distSq <= maxReachSq;
     }
@@ -945,8 +922,6 @@ public class CombatController {
         setNextAttackCooldown();
         return true;
     }
-
-<<<<<<< ours
 
     private boolean tryAttackTargetWithRetry(ServerPlayerEntity target) {
         if (pendingRetryTicks > 0) {
@@ -966,11 +941,6 @@ public class CombatController {
 
     private void swingAt(ServerPlayerEntity target) {
         if (!tryAttackTargetWithRetry(target)) return;
-=======
-    private void swingAt(ServerPlayerEntity target) {
-        if (shielding) return;
-        if (!tryAttackTarget(target)) return;
->>>>>>> theirs
     }
 
     private void queueJumpCrit() {
@@ -987,8 +957,6 @@ public class CombatController {
 
     private void finishCombo() {
         comboStep      = 0;
-        outOfRangeTicks = 0;
-        pendingRetryTicks = 0;
         outOfRangeTicks = 0;
         pendingRetryTicks = 0;
         waitingForCrit = false;

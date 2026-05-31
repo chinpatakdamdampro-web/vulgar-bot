@@ -24,9 +24,6 @@ public class MovementController {
     private Vec3d lastPosForStuckCheck = null;
 
     private int knockbackSuppressTicks = 0;
-    private int blockedTicks = 0;
-    private int stuckTicks = 0;
-    private Vec3d lastPosForStuckCheck = null;
 
     private static final int KNOCKBACK_SUPPRESS_TICKS = 6;
 
@@ -41,10 +38,7 @@ public class MovementController {
     private static final double WALK_SPEED   = 0.15;
     private static final double SPRINT_SPEED = 0.26;
     private static final int SAFE_DROP_LIMIT = 2;
-<<<<<<< ours
-=======
     private static final int SAFE_CHASE_DROP_LIMIT = 4;
->>>>>>> theirs
 
     public MovementController(PvPBotEntity bot) {
         this.bot = bot;
@@ -59,12 +53,8 @@ public class MovementController {
     public void tick() {
         EntityPlayerMPFake fp = bot.getFakePlayer();
         if (knockbackSuppressTicks > 0) knockbackSuppressTicks--;
-<<<<<<< ours
-        tickStuckRecovery(bot.getFakePlayer());
-=======
         tickLedgeLatch(fp);
         tickStuckRecovery(fp);
->>>>>>> theirs
     }
 
     // -------------------------------------------------------------------------
@@ -89,14 +79,7 @@ public class MovementController {
         boolean shouldSprint = followMode ? (dist > FOLLOW_WALK_DIST) : false;
         double speed = shouldSprint ? SPRINT_SPEED : WALK_SPEED;
 
-<<<<<<< ours
-        if (!applyVelocityOrSteer(fp, dx, dz, speed, shouldSprint)) return;
-
-        // FIX Bug 3: jump over obstacles in the path
-        tryJumpOverObstacle(fp, dx, dz);
-=======
         applyNavigatedHorizontalVelocity(destination, dir[0], dir[1], speed, shouldSprint, false);
->>>>>>> theirs
     }
 
     // -------------------------------------------------------------------------
@@ -117,48 +100,7 @@ public class MovementController {
         double[] dir = directionTo(fp.getPos(), destination);
         if (dir == null) return;
 
-<<<<<<< ours
-        if (!applyVelocityOrSteer(fp, dx, dz, SPRINT_SPEED, true)) return;
-        tryJumpOverObstacle(fp, dx, dz);
-    }
-
-    // -------------------------------------------------------------------------
-    // FIX Bug 3 â€” Jump over blocks in the path
-    // Checks one block ahead in the movement direction. If there's a solid
-    // block at foot level and open space above it, jump.
-    // -------------------------------------------------------------------------
-
-    private void tryJumpOverObstacle(EntityPlayerMPFake fp, double dx, double dz) {
-        if (!fp.isOnGround()) return;
-        if (fp.getVelocity().y > 0.01) return; // already jumping
-
-        double checkX = fp.getX() + dx * 0.75;
-        double checkZ = fp.getZ() + dz * 0.75;
-        int bx = (int) Math.floor(checkX);
-        int by = (int) Math.floor(fp.getY());
-        int bz = (int) Math.floor(checkZ);
-
-        var world = fp.getWorld();
-        BlockPos feetAhead = new BlockPos(bx, by, bz);
-        BlockPos headAhead = feetAhead.up();
-        BlockPos clearAbove = headAhead.up(); // need clearance above jump destination
-
-        BlockState feetState  = world.getBlockState(feetAhead);
-        BlockState headState  = world.getBlockState(headAhead);
-        BlockState clearState = world.getBlockState(clearAbove);
-
-        // Jump if there's a solid block at our foot level ahead but open above
-        boolean blockedAtFeet = !feetState.isAir() && feetState.isSolidBlock(world, feetAhead);
-        boolean openAtHead    = headState.isAir();
-        boolean openAboveJump = clearState.isAir();
-
-        if (blockedAtFeet && openAtHead && openAboveJump) {
-            Vec3d vel = fp.getVelocity();
-            fp.setVelocity(vel.x, 0.42, vel.z);
-        }
-=======
         applyNavigatedHorizontalVelocity(destination, dir[0], dir[1], SPRINT_SPEED, true, true);
->>>>>>> theirs
     }
 
     // -------------------------------------------------------------------------
@@ -210,12 +152,7 @@ public class MovementController {
         if (dir == null) return;
 
         double speed = sprint ? SPRINT_SPEED : WALK_SPEED;
-<<<<<<< ours
-        if (!applyVelocityOrSteer(fp, dx, dz, speed, sprint)) return;
-        tryJumpOverObstacle(fp, dx, dz);
-=======
         applyNavigatedHorizontalVelocity(dest, dir[0], dir[1], speed, sprint, false);
->>>>>>> theirs
     }
 
     private void backAwayFrom(ServerPlayerEntity target) {
@@ -228,13 +165,8 @@ public class MovementController {
             dx = Math.cos(angle); dz = Math.sin(angle);
         } else { dx /= len; dz /= len; }
         double strafeX = -dz * (strafeDir != 0 ? strafeDir : 1) * 0.08;
-<<<<<<< ours
-        double strafeZ  =  dx * (strafeDir != 0 ? strafeDir : 1) * 0.08;
-        if (!applyVelocityOrSteer(fp, dx + strafeX, dz + strafeZ, WALK_SPEED, false)) return;
-=======
         double strafeZ =  dx * (strafeDir != 0 ? strafeDir : 1) * 0.08;
         applyNavigatedHorizontalVelocity(target.getPos(), dx + strafeX, dz + strafeZ, WALK_SPEED, false, true);
->>>>>>> theirs
     }
 
     private void maybeStrafe(ServerPlayerEntity target) {
@@ -268,11 +200,7 @@ public class MovementController {
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len < 0.001) { dx = rng.nextDouble() * 2 - 1; dz = rng.nextDouble() * 2 - 1; len = 1; }
         dx /= len; dz /= len;
-<<<<<<< ours
-        if (!applyVelocityOrSteer(fp, dx, dz, SPRINT_SPEED, true)) return;
-=======
         applyNavigatedHorizontalVelocity(target.getPos(), dx, dz, SPRINT_SPEED, true, true);
->>>>>>> theirs
         float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
         fp.setHeadYaw(yaw); fp.setBodyYaw(yaw); fp.setYaw(yaw);
         fp.setPitch(0f);
@@ -448,7 +376,6 @@ public class MovementController {
 
         // One-block step-up is fine if there is head clearance; two-block walls/trees
         // are not, so steering picks a side instead of ramming the obstacle.
-        BlockPos stepHead = head;
         BlockPos stepClear = head.up();
         boolean solidStep = !feetState.isAir() && feetState.isSolidBlock(world, feet);
         return solidStep && headState.isAir() && world.getBlockState(stepClear).isAir() && fp.isOnGround();
@@ -641,148 +568,6 @@ public class MovementController {
         if (len < 0.001) return null;
         return new double[] { dx / len, dz / len };
     }
-
-
-    private boolean applySafeHorizontalVelocity(double dirX, double dirZ, double speed, boolean sprint) {
-        EntityPlayerMPFake fp = bot.getFakePlayer();
-        double len = Math.sqrt(dirX * dirX + dirZ * dirZ);
-        if (len < 0.001) return false;
-        double nx = dirX / len;
-        double nz = dirZ / len;
-
-        if (bot.getConfig().pathMode == com.pvpbot.config.BotConfig.PathMode.SAFE
-                && !isSafeGroundAhead(fp, nx, nz)) {
-            setSprinting(false);
-            Vec3d vel = fp.getVelocity();
-            fp.setVelocity(vel.x * 0.2, vel.y, vel.z * 0.2);
-            return false;
-        }
-
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(nx * speed, vel.y, nz * speed);
-        setSprinting(sprint);
-        return true;
-    }
-
-    private boolean isSafeGroundAhead(EntityPlayerMPFake fp, double dx, double dz) {
-        var world = fp.getWorld();
-        int footY = (int) Math.floor(fp.getY());
-        double[] probes = {0.75, 1.1};
-        for (double d : probes) {
-            int x = (int) Math.floor(fp.getX() + dx * d);
-            int z = (int) Math.floor(fp.getZ() + dz * d);
-
-            BlockPos feet = new BlockPos(x, footY, z);
-            BlockPos head = feet.up();
-            if (!world.getBlockState(feet).isAir() || !world.getBlockState(head).isAir()) {
-                continue;
-            }
-
-            boolean foundSupport = false;
-            for (int drop = 1; drop <= SAFE_DROP_LIMIT; drop++) {
-                BlockPos below = feet.down(drop);
-                BlockState belowState = world.getBlockState(below);
-                if (!belowState.isAir() && belowState.isSolidBlock(world, below)) {
-                    foundSupport = true;
-                    break;
-                }
-            }
-            if (!foundSupport) return false;
-        }
-        return true;
-    }
-
-
-    private boolean isTraversableAt(EntityPlayerMPFake fp, int x, int y, int z) {
-        var world = fp.getWorld();
-        BlockPos feet = new BlockPos(x, y, z);
-        BlockPos head = feet.up();
-        return world.getBlockState(feet).isAir() && world.getBlockState(head).isAir();
-    }
-
-    private boolean applyVelocityOrSteer(EntityPlayerMPFake fp, double dx, double dz, double speed, boolean sprint) {
-        double len = Math.sqrt(dx * dx + dz * dz);
-        if (len < 0.001) return false;
-        double nx = dx / len;
-        double nz = dz / len;
-
-        if (tryMoveDirection(fp, nx, nz, speed, sprint)) return true;
-
-        // steer left/right around wall/tree
-        double leftX = -nz, leftZ = nx;
-        double rightX = nz, rightZ = -nx;
-
-        // bias alternates by blockedTicks so it doesn't always choose same side
-        boolean leftFirst = (blockedTicks % 2 == 0);
-
-        if (leftFirst) {
-            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * leftX, 0.75 * nz + 0.65 * leftZ, speed, sprint)) return true;
-            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * rightX, 0.75 * nz + 0.65 * rightZ, speed, sprint)) return true;
-        } else {
-            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * rightX, 0.75 * nz + 0.65 * rightZ, speed, sprint)) return true;
-            if (tryMoveDirection(fp, 0.75 * nx + 0.65 * leftX, 0.75 * nz + 0.65 * leftZ, speed, sprint)) return true;
-        }
-
-        // fallback: pure strafe sidestep if front is blocked
-        if (tryMoveDirection(fp, leftX, leftZ, WALK_SPEED, false)) return true;
-        if (tryMoveDirection(fp, rightX, rightZ, WALK_SPEED, false)) return true;
-
-        // fully blocked
-        setSprinting(false);
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(vel.x * 0.2, vel.y, vel.z * 0.2);
-        blockedTicks++;
-        return false;
-    }
-
-    private boolean tryMoveDirection(EntityPlayerMPFake fp, double dx, double dz, double speed, boolean sprint) {
-        double len = Math.sqrt(dx * dx + dz * dz);
-        if (len < 0.001) return false;
-        double nx = dx / len;
-        double nz = dz / len;
-
-        int y = (int) Math.floor(fp.getY());
-        int x1 = (int) Math.floor(fp.getX() + nx * 0.85);
-        int z1 = (int) Math.floor(fp.getZ() + nz * 0.85);
-
-        // avoid walking into solid wall/tree
-        if (!isTraversableAt(fp, x1, y, z1)) return false;
-
-        // keep SAFE drop behavior
-        if (bot.getConfig().pathMode == com.pvpbot.config.BotConfig.PathMode.SAFE
-                && !isSafeGroundAhead(fp, nx, nz)) return false;
-
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(nx * speed, vel.y, nz * speed);
-        setSprinting(sprint);
-        blockedTicks = 0;
-        return true;
-    }
-
-    private void tickStuckRecovery(EntityPlayerMPFake fp) {
-        Vec3d pos = fp.getPos();
-        if (lastPosForStuckCheck == null) {
-            lastPosForStuckCheck = pos;
-            return;
-        }
-        double d2 = pos.squaredDistanceTo(lastPosForStuckCheck);
-        lastPosForStuckCheck = pos;
-
-        if (d2 < 0.01 && horizontalSpeed(fp) < 0.05) {
-            stuckTicks++;
-            if (stuckTicks > 14) {
-                // unstuck nudge + optional jump
-                double ang = rng.nextDouble() * Math.PI * 2.0;
-                Vec3d vel = fp.getVelocity();
-                fp.setVelocity(Math.cos(ang) * 0.16, vel.y, Math.sin(ang) * 0.16);
-                if (fp.isOnGround()) fp.setVelocity(fp.getVelocity().x, 0.42, fp.getVelocity().z);
-                stuckTicks = 0;
-            }
-        } else {
-            stuckTicks = 0;
-        }
-    }
-
 
     private double horizontalSpeed(EntityPlayerMPFake fp) {
         var vel = fp.getVelocity();

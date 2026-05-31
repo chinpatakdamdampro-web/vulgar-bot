@@ -85,14 +85,12 @@ public class BotConfig {
     /** Movement safety profile — LEGACY keeps old behavior, SAFE avoids holes/ledges. */
     public PathMode pathMode = PathMode.SAFE;
 
-<<<<<<< ours
     // Safe rollout: keep legacy combat by default, allow opt-in v2.
     public enum CombatEngine { LEGACY, V2 }
     public CombatEngine combatEngine = CombatEngine.LEGACY;
-=======
+
     /** When true, falling bots try to grab/push into nearby ledges to reduce lethal falls. */
     public boolean ledgeLatchEnabled = true;
->>>>>>> theirs
 
     /** Current difficulty — affects stats AND applies passive effects. */
     public Difficulty difficulty = Difficulty.MEDIUM;

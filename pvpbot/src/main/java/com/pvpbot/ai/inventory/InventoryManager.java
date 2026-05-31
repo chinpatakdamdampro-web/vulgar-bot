@@ -99,6 +99,10 @@ public class InventoryManager {
         ServerPlayerEntity fp = bot.getFakePlayer();
         if (fp.isUsingItem()) return;
 
+        // Totem first, then food. This prevents the bot from starting a gapple
+        // animation while the offhand is still missing its emergency totem.
+        ensureTotemInOffhand();
+
         float health = fp.getHealth();
 
         if (health <= bot.getConfig().notchAppleThreshold) {
@@ -417,6 +421,7 @@ public class InventoryManager {
 
     private boolean tryEat(Item foodItem) {
         ServerPlayerEntity fp = bot.getFakePlayer();
+        ensureTotemInOffhand();
         var inv = fp.getInventory();
         for (int i = 0; i < inv.size(); i++) {
             ItemStack stack = inv.getStack(i);
@@ -565,6 +570,45 @@ public class InventoryManager {
             }
             return;
         }
+    }
+
+    public boolean tryThrowTurtleMasterAtFeet() {
+        ServerPlayerEntity fp = bot.getFakePlayer();
+        var inv = fp.getInventory();
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = inv.getStack(i);
+            if (!stack.isOf(Items.SPLASH_POTION) && !stack.isOf(Items.LINGERING_POTION)) continue;
+            var contents = stack.get(DataComponentTypes.POTION_CONTENTS);
+            if (contents == null) continue;
+
+            boolean hasResistance = false;
+            boolean hasSlowness = false;
+            for (var effect : contents.getEffects()) {
+                var typeKey = effect.getEffectType().getKey();
+                if (typeKey.isEmpty()) continue;
+                String path = typeKey.get().getValue().getPath();
+                if (path.equals("resistance")) hasResistance = true;
+                if (path.equals("slowness")) hasSlowness = true;
+            }
+            if (!hasResistance || !hasSlowness) continue;
+
+            throwSplashPotion(fp, inv, i, stack);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean consumeOrbitalStrikeToken() {
+        ServerPlayerEntity fp = bot.getFakePlayer();
+        var inv = fp.getInventory();
+        for (int i = 0; i < 36; i++) {
+            ItemStack stack = inv.getStack(i);
+            if (!stack.isOf(Items.FISHING_ROD)) continue;
+            stack.decrement(1);
+            if (stack.isEmpty()) inv.setStack(i, ItemStack.EMPTY);
+            return true;
+        }
+        return false;
     }
 
     /**

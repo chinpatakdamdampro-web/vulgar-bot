@@ -78,6 +78,7 @@ public class CombatController {
     private static final int ORBITAL_COOLDOWN       = 100; // 5 seconds between strikes
     private static final int WEB_CONFIRM_TICKS      = 10;  // must be stuck this long before firing
     private static final int WEB_CONFIRM_TICKS_BUBBLE = 4; // cobweb bubble = faster confirm (can't escape)
+    private int turtleMasterCooldown = 0;
 
     // Cobweb trap + orbital retreat state
     private boolean cobwebTrapActive     = false;
@@ -151,6 +152,7 @@ public class CombatController {
 
         // Cobweb cooldown countdown
         if (cobwebCooldown > 0) cobwebCooldown--;
+        if (turtleMasterCooldown > 0) turtleMasterCooldown--;
 
         // Wind burst airborne breach swap â€” opportunistic crit when launched up
         tickWindBurstBreachSwap(target);
@@ -170,13 +172,12 @@ public class CombatController {
         checkTotemPop(fp);
 
         // Potion check
+        tickEmergencyTurtleMaster(target);
         tickPotions();
 
         // Orbital strike â€” fires stab shot if target is stuck in cobweb (optional mod)
         tickOrbitalStrike(target);
 
-        // Cobweb trap â€” place webs at target's feet then retreat for orbital shot
-        tickCobwebTrap(target);
 
         // Mace/falling-player shield â€” mainhand block
         if (!hasTotem) {
@@ -222,7 +223,8 @@ public class CombatController {
         // Keep the existing spacing rule for normal targets, but allow a tighter
         // minimum when fighting another fake player so collision doesn't create a
         // dead-zone where both bots only keep moving.
-        double minRangeSq = (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
+        boolean targetWebbedForMelee = isTargetInCobweb(target);
+        double minRangeSq = targetWebbedForMelee ? 0.25 : (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
         if (distSq < minRangeSq || distSq > maxRangeSq) {
             outOfRangeTicks++;
@@ -243,8 +245,9 @@ public class CombatController {
         // Accuracy check
         if (!target.isOnGround() && rng.nextDouble() < cfg.accuracyReduction) return;
 
-        // Waiting for crit arc (descending)
-        if (waitingForCrit) {
+        // Waiting for crit arc (descending). BREACH_SWAP owns its own step-2
+        // timeout so it cannot get stuck staring at a webbed target if a jump fails.
+        if (waitingForCrit && !(currentPattern == ComboPattern.BREACH_SWAP && comboStep == 2)) {
             if (fp.getVelocity().y < -0.08) {
                 waitingForCrit = false;
                 swingAt(target);
@@ -419,7 +422,8 @@ public class CombatController {
         boolean isUltraHard = cfg.difficulty == BotConfig.Difficulty.ULTRA_HARD;
 
         if (isUltraHard && isOrbitalModLoaded()
-                && rng.nextInt(100) < ORBITAL_TRIGGER_CHANCE_PCT) {
+                && rng.nextInt(100) < ORBITAL_TRIGGER_CHANCE_PCT
+                && inventory.consumeOrbitalStrikeToken()) {
             // ULTRA HARD: retreat and fire orbital
             EntityPlayerMPFake fp = bot.getFakePlayer();
             double dx = fp.getX() - target.getX();
@@ -440,7 +444,12 @@ public class CombatController {
             // Player is stuck â€” guaranteed crit opportunity
             if (inventory.hasBreachMace()) {
                 currentPattern = ComboPattern.BREACH_SWAP;
+<<<<<<< ours
                 comboStep      = 1; // skip opener and go straight to crit setup
+=======
+                comboStep      = 1; // target is webbed: go straight to mace crit setup
+                attackCooldown = 0;
+>>>>>>> theirs
                 breachSwapStep1Timeout = 0;
                 waitingForCrit = false;
             }
@@ -519,6 +528,7 @@ public class CombatController {
         int required = isBubble ? WEB_CONFIRM_TICKS_BUBBLE : WEB_CONFIRM_TICKS;
         if (targetInWebTicks < required) return;
         if (orbitalStrikeCooldown > 0) return;
+        if (!inventory.consumeOrbitalStrikeToken()) return;
 
         fireOrbitalStabReflection(target, world);
     }
@@ -551,6 +561,25 @@ public class CombatController {
                 .getInstance().isModLoaded("stabshot");
     }
 
+
+    private void tickEmergencyTurtleMaster(ServerPlayerEntity target) {
+        if (turtleMasterCooldown > 0) return;
+        EntityPlayerMPFake fp = bot.getFakePlayer();
+        float health = fp.getHealth();
+        if (health > 10.0f) return;
+
+        boolean maceThreat = target.getMainHandStack().isOf(Items.MACE)
+                && target.getY() - fp.getY() > 1.2
+                && target.getVelocity().y < -0.04;
+        boolean panicMelee = health <= 10.0f && fp.squaredDistanceTo(target) <= 25.0;
+        boolean deathDoor = health <= 2.0f;
+        if (!maceThreat && !panicMelee && !deathDoor) return;
+
+        movement.lookAt(fp.getPos().add(0, -2.0, 0));
+        if (inventory.tryThrowTurtleMasterAtFeet()) {
+            turtleMasterCooldown = 160;
+        }
+    }
 
     private void tickPotions() {
         potionCheckTimer++;
@@ -762,7 +791,7 @@ public class CombatController {
 
     // Timeout for breach swap step 1 â€” force swing after this many ticks if neither falling nor ground resolves
     private int breachSwapStep1Timeout = 0;
-    private static final int BREACH_SWAP_TIMEOUT = 10;
+    private static final int BREACH_SWAP_TIMEOUT = 24;
 
     /**
      * BREACH_SWAP:
@@ -792,8 +821,12 @@ public class CombatController {
                 boolean timedOut   = breachSwapStep1Timeout >= BREACH_SWAP_TIMEOUT;
                 boolean selfWebbed = botStandingInCobweb();
 
+<<<<<<< ours
                 if (isFalling || timedOut) {
                     // Falling naturally = crit. Timed out = force swing anyway.
+=======
+                if (isFalling) {
+>>>>>>> theirs
                     if (!tryAttackTarget(target)) { finishCombo(); return; }
                     inventory.scheduleSwapBackToSword();
                     breachSwapStep1Timeout = 0;
@@ -811,17 +844,28 @@ public class CombatController {
                     waitingForCrit = true;
                     breachSwapStep1Timeout = 0;
                     comboStep = 2;
+                } else if (timedOut) {
+                    // Do not dump a mostly non-crit mace swing after webbing.
+                    // Reset instead so the next grounded tick starts a clean jump-crit.
+                    waitingForCrit = false;
+                    breachSwapStep1Timeout = 0;
+                    comboStep = 1;
                 }
                 // still rising from wind burst â€” wait, timeout will catch it
             }
             case 2 -> {
-                // Waiting for descent
+                breachSwapStep1Timeout++;
                 if (bot.getFakePlayer().getVelocity().y < -0.05) {
                     waitingForCrit = false;
                     bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
                     if (!tryAttackTarget(target)) { finishCombo(); return; }
                     inventory.scheduleSwapBackToSword();
+                    breachSwapStep1Timeout = 0;
                     finishCombo();
+                } else if (breachSwapStep1Timeout >= BREACH_SWAP_TIMEOUT) {
+                    waitingForCrit = false;
+                    breachSwapStep1Timeout = 0;
+                    comboStep = 1;
                 }
             }
         }
@@ -855,6 +899,16 @@ public class CombatController {
     // Helpers
     // =========================================================================
 
+<<<<<<< ours
+=======
+    private boolean isTargetInCobweb(ServerPlayerEntity target) {
+        ServerWorld world = (ServerWorld) bot.getFakePlayer().getWorld();
+        BlockPos feet = target.getBlockPos();
+        return world.getBlockState(feet).isOf(Blocks.COBWEB)
+                || world.getBlockState(feet.up()).isOf(Blocks.COBWEB);
+    }
+
+>>>>>>> theirs
     // Strict melee reach guard to prevent impossible hits while targets are far
     // above/below or otherwise outside vanilla-like melee distance.
     private boolean isWithinMeleeAttackRange(ServerPlayerEntity target) {
@@ -863,6 +917,7 @@ public class CombatController {
         double dy = target.getY() - fp.getY();
         double dz = target.getZ() - fp.getZ();
         double distSq = dx * dx + dy * dy + dz * dz;
+<<<<<<< ours
 
         double reach = cfg.attackReach;
         var world = (ServerWorld) fp.getWorld();
@@ -873,6 +928,12 @@ public class CombatController {
         // small bonus only when target is trapped in web
         if (targetWebbed) reach += 0.65;
 
+=======
+        double reach = cfg.attackReach;
+        if (isTargetInCobweb(target) && Math.abs(dy) < 2.75) {
+            reach += 0.35;
+        }
+>>>>>>> theirs
         double maxReachSq = reach * reach;
         return distSq <= maxReachSq;
     }
@@ -885,6 +946,7 @@ public class CombatController {
         return true;
     }
 
+<<<<<<< ours
 
     private boolean tryAttackTargetWithRetry(ServerPlayerEntity target) {
         if (pendingRetryTicks > 0) {
@@ -904,6 +966,11 @@ public class CombatController {
 
     private void swingAt(ServerPlayerEntity target) {
         if (!tryAttackTargetWithRetry(target)) return;
+=======
+    private void swingAt(ServerPlayerEntity target) {
+        if (shielding) return;
+        if (!tryAttackTarget(target)) return;
+>>>>>>> theirs
     }
 
     private void queueJumpCrit() {
@@ -971,6 +1038,7 @@ public class CombatController {
         smpShieldTimer         = 0;
         orbitalStrikeCooldown  = 0;
         targetInWebTicks       = 0;
+        turtleMasterCooldown   = 0;
         cobwebTrapActive       = false;
         orbitalRetreatTarget   = null;
         orbitalRetreatTimer    = 0;

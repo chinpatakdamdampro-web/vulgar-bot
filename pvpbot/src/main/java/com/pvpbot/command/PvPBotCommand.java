@@ -101,6 +101,14 @@ public class PvPBotCommand {
                     .then(literal("crit") .executes(ctx -> execMode(ctx, "crit")))
                     .then(literal("combo").executes(ctx -> execMode(ctx, "combo")))
                     .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))))
+            .then(literal("path")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("safe").executes(ctx -> execPath(ctx, "safe")))
+                    .then(literal("legacy").executes(ctx -> execPath(ctx, "legacy")))))
+            .then(literal("ledge")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("on").executes(ctx -> execLedge(ctx, true)))
+                    .then(literal("off").executes(ctx -> execLedge(ctx, false)))))
 
             // /pb config — persistent server config
             .then(literal("config")
@@ -176,6 +184,8 @@ public class PvPBotCommand {
         send(ctx, "§7  easy§7=slow  §emedium§7=default  §chard§7=fast  §4ultrahard§7=Str3");
         send(ctx, "§6§l── Combat Mode ──");
         send(ctx, "§e/pb mode §f<bot> <crit|combo|smp> §7Set combat style");
+        send(ctx, "§e/pb path §f<bot> <safe|legacy>   §7Pathing safety profile");
+        send(ctx, "§e/pb ledge §f<bot> <on|off>       §7Falling ledge latch toggle");
         send(ctx, "§6§l── Global Settings ──");
         send(ctx, "§e/pb settings §fRevenge <true|false>  §7Revenge for ALL bots + save");
         send(ctx, "§e/pb config setdefault §f<diff>       §7Default difficulty for new spawns");
@@ -380,6 +390,8 @@ public class PvPBotCommand {
         send(ctx, "§7Pattern:  §f" + bot.getCombat().getCurrentPatternName());
         send(ctx, "§7Shield:   §f" + bot.getCombat().isShielding());
         send(ctx, "§7Mode:     §f" + bot.getConfig().mode.name());
+        send(ctx, "§7Path:     §f" + bot.getConfig().pathMode.name()
+                + " §7| Ledge: §f" + (bot.getConfig().ledgeLatchEnabled ? "ON" : "OFF"));
         send(ctx, "§7Revenge:  §f" + bot.getConfig().revengeMode);
         send(ctx, "§7BreachMace: §f" + (bot.getInventory().hasBreachMace() ? "§aYES" : "§7none"));
         send(ctx, "§7Faction:  §f" + (bot.getFaction() != null ? bot.getFaction() : "none"));
@@ -501,6 +513,9 @@ public class PvPBotCommand {
         };
 
         bot.getConfig().mode = mode;
+        // Rebuild from difficulty baseline first so changing /pb mode repeatedly
+        // cannot stack old modifiers on top of each other.
+        bot.getConfig().applyDifficulty();
         bot.getConfig().applyMode();
 
         sendSuccess(ctx, "§f" + botName + "§a mode → §f" + mode.name());
@@ -511,6 +526,37 @@ public class PvPBotCommand {
         }
         send(ctx, "§7Crit: §f" + bot.getConfig().critChancePercent
                 + "% §7| Cooldown: §f" + bot.getConfig().attackCooldownTicks + " ticks");
+        return 1;
+    }
+
+    private static int execPath(CommandContext<ServerCommandSource> ctx, String pathName) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+
+        BotConfig.PathMode mode = switch (pathName.toLowerCase()) {
+            case "legacy" -> BotConfig.PathMode.LEGACY;
+            default -> BotConfig.PathMode.SAFE;
+        };
+        bot.getConfig().pathMode = mode;
+
+        sendSuccess(ctx, "§f" + botName + "§a path mode → §f" + mode.name());
+        switch (mode) {
+            case SAFE -> send(ctx, "§7SAFE: avoids ledges/holes while moving and retreating.");
+            case LEGACY -> send(ctx, "§7LEGACY: original aggressive movement without ledge checks.");
+        }
+        return 1;
+    }
+
+    private static int execLedge(CommandContext<ServerCommandSource> ctx, boolean enabled) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+        bot.getConfig().ledgeLatchEnabled = enabled;
+        sendSuccess(ctx, "§f" + botName + "§a ledge latch → §f" + (enabled ? "ON" : "OFF"));
+        send(ctx, enabled
+                ? "§7The bot will try to grab nearby ledges while falling."
+                : "§7The bot will no longer alter falling movement for ledge saves.");
         return 1;
     }
 

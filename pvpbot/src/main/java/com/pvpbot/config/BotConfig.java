@@ -82,6 +82,12 @@ public class BotConfig {
     /** Current combat mode — affects crit chance, strafe, accuracy. */
     public BotMode mode = BotMode.COMBO;
 
+    /** Movement safety profile — LEGACY keeps old behavior, SAFE avoids holes/ledges. */
+    public PathMode pathMode = PathMode.SAFE;
+
+    /** When true, falling bots try to grab/push into nearby ledges to reduce lethal falls. */
+    public boolean ledgeLatchEnabled = true;
+
     /** Current difficulty — affects stats AND applies passive effects. */
     public Difficulty difficulty = Difficulty.MEDIUM;
 
@@ -126,6 +132,11 @@ public class BotConfig {
         COMBO,
         /** Less strafe, shield-predict hits, more deliberate. */
         SMP
+    }
+
+    public enum PathMode {
+        LEGACY,
+        SAFE
     }
 
     // -------------------------------------------------------------------------

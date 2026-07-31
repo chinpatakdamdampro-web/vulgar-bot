@@ -149,11 +149,6 @@ public class BotConfig {
         SAFE
     }
 
-    public enum PathMode {
-        LEGACY,
-        SAFE
-    }
-
     // -------------------------------------------------------------------------
     // applyDifficulty — call after setting difficulty to update all derived values
     // -------------------------------------------------------------------------

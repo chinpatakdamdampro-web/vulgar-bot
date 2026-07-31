@@ -82,6 +82,18 @@ public class BotConfig {
     /** Current combat mode — affects crit chance, strafe, accuracy. */
     public BotMode mode = BotMode.COMBO;
 
+    /** Movement safety profile — LEGACY keeps old behavior, SAFE avoids holes/ledges. */
+    public PathMode pathMode = PathMode.SAFE;
+
+    /** Realistic webbing places one feet web only when target is grounded. */
+    public boolean realisticWebbing = true;
+
+    /** If false, this bot cannot perform two attack() calls in the same server tick. */
+    public boolean allowSameTickAttacks = false;
+
+    /** When true, falling bots try to grab/push into nearby ledges to reduce lethal falls. */
+    public boolean ledgeLatchEnabled = true;
+
     /** Current difficulty — affects stats AND applies passive effects. */
     public Difficulty difficulty = Difficulty.MEDIUM;
 
@@ -125,7 +137,18 @@ public class BotConfig {
         /** Balanced combos + crits. Default. */
         COMBO,
         /** Less strafe, shield-predict hits, more deliberate. */
-        SMP
+        SMP,
+        /** New name for CRIT-style pressure. */
+        AGGRESSIVE,
+        /** New name for COMBO-style balanced play. */
+        ADAPTIVE,
+        /** New name for SMP-style safe play. */
+        DEFENSIVE
+    }
+
+    public enum PathMode {
+        LEGACY,
+        SAFE
     }
 
     // -------------------------------------------------------------------------
@@ -202,22 +225,26 @@ public class BotConfig {
 
     public void applyMode() {
         switch (mode) {
-            case CRIT -> {
-                critChancePercent        = Math.min(95, critChancePercent + 20);
-                sprintResetChancePercent = Math.max(10, sprintResetChancePercent - 15);
-                strafeFrequency          = Math.min(0.9, strafeFrequency + 0.25);
+            case CRIT, AGGRESSIVE -> {
+                critChancePercent        = Math.min(98, critChancePercent + 25);
+                sprintResetChancePercent = Math.min(90, sprintResetChancePercent + 10);
+                strafeFrequency          = Math.max(0.10, strafeFrequency - 0.15);
                 accuracyReduction        = Math.max(0.01, accuracyReduction - 0.05);
-                attackCooldownTicks      = Math.max(6, attackCooldownTicks - 1);
+                attackCooldownTicks      = Math.max(6, attackCooldownTicks - 2);
+                preferredRange           = Math.max(1.8, preferredRange - 0.25);
             }
-            case COMBO -> {
-                // No adjustment — combo is the baseline mode, difficulty drives values
+            case COMBO, ADAPTIVE -> {
+                critChancePercent        = Math.min(92, critChancePercent + 10);
+                sprintResetChancePercent = Math.min(80, sprintResetChancePercent + 5);
+                accuracyReduction        = Math.max(0.01, accuracyReduction - 0.03);
             }
-            case SMP -> {
-                critChancePercent        = Math.max(10, critChancePercent - 15);
-                sprintResetChancePercent = Math.max(10, sprintResetChancePercent - 20);
-                strafeFrequency          = Math.min(0.9, strafeFrequency + 0.30);
+            case SMP, DEFENSIVE -> {
+                critChancePercent        = Math.max(35, critChancePercent - 5);
+                sprintResetChancePercent = Math.max(20, sprintResetChancePercent - 10);
+                strafeFrequency          = Math.min(0.75, strafeFrequency + 0.20);
                 accuracyReduction        = Math.max(0.01, accuracyReduction - 0.07);
-                attackCooldownTicks      = Math.min(20, attackCooldownTicks + 2);
+                attackCooldownTicks      = Math.min(18, attackCooldownTicks + 1);
+                preferredRange           = Math.min(3.0, preferredRange + 0.25);
             }
         }
     }

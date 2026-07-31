@@ -16,6 +16,7 @@ import com.pvpbot.util.DebugSystem;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -100,7 +101,20 @@ public class PvPBotCommand {
                 .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
                     .then(literal("crit") .executes(ctx -> execMode(ctx, "crit")))
                     .then(literal("combo").executes(ctx -> execMode(ctx, "combo")))
-                    .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))))
+                    .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))
+                    .then(literal("aggressive").executes(ctx -> execMode(ctx, "aggressive")))
+                    .then(literal("adaptive")  .executes(ctx -> execMode(ctx, "adaptive")))
+                    .then(literal("defensive") .executes(ctx -> execMode(ctx, "defensive")))))
+            .then(literal("path")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("safe").executes(ctx -> execPath(ctx, "safe")))
+                    .then(literal("legacy").executes(ctx -> execPath(ctx, "legacy")))))
+            .then(literal("ledge")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("on").executes(ctx -> execLedge(ctx, true)))
+                    .then(literal("off").executes(ctx -> execLedge(ctx, false)))))
+            .then(literal("gui")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES).executes(PvPBotCommand::execSettingsGui)))
 
             // /pb config — persistent server config
             .then(literal("config")
@@ -151,6 +165,11 @@ public class PvPBotCommand {
                         .then(argument("targetPlayer", EntityArgumentType.player())
                             .executes(PvPBotCommand::execFactionAttack)))))
         );
+
+        dispatcher.register(literal("pvpbot")
+            .requires(src -> src.hasPermissionLevel(2))
+            .then(literal("gui")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES).executes(PvPBotCommand::execSettingsGui))));
     }
 
     // =========================================================================
@@ -175,7 +194,11 @@ public class PvPBotCommand {
         send(ctx, "§e/pb diff §f<bot> <easy|medium|hard|ultrahard>");
         send(ctx, "§7  easy§7=slow  §emedium§7=default  §chard§7=fast  §4ultrahard§7=Str3");
         send(ctx, "§6§l── Combat Mode ──");
-        send(ctx, "§e/pb mode §f<bot> <crit|combo|smp> §7Set combat style");
+        send(ctx, "§e/pb mode §f<bot> <aggressive|adaptive|defensive> §7Set combat style");
+        send(ctx, "§7  old aliases still work: §fcrit§7, §fcombo§7, §fsmp");
+        send(ctx, "§e/pb path §f<bot> <safe|legacy>   §7Pathing safety profile");
+        send(ctx, "§e/pb ledge §f<bot> <on|off>       §7Falling ledge latch toggle");
+        send(ctx, "§e/pvpbot gui §f<bot>              §7Open vanilla settings GUI");
         send(ctx, "§6§l── Global Settings ──");
         send(ctx, "§e/pb settings §fRevenge <true|false>  §7Revenge for ALL bots + save");
         send(ctx, "§e/pb config setdefault §f<diff>       §7Default difficulty for new spawns");
@@ -283,15 +306,15 @@ public class PvPBotCommand {
             return 0;
         }
 
-        send(ctx, "§7Mass-spawning §f" + count + "§7 bots...");
+        send(ctx, "§7Queueing §f" + count + "§7 bots for safe staggered spawning...");
         DEBUG.log(src, "massSpawn count=" + count + ", available names=" + names.size());
 
         BotConfig cfg = PvPBotConfigFile.getInstance().buildDefaultConfig();
         List<String> attempted = BotSpawner.massSpawn(
                 src.getServer(), src.getWorld(), src.getPosition(), count, cfg);
 
-        sendSuccess(ctx, "Spawned §f" + attempted.size() + "§a bots: §7" + String.join(", ", attempted));
-        send(ctx, "§7Registration may take §f4 seconds §7for each bot to appear.");
+        sendSuccess(ctx, "Queued §f" + attempted.size() + "§a bots: §7" + String.join(", ", attempted));
+        send(ctx, "§7Bots spawn gradually to avoid lag spikes and registration crashes.");
         if (attempted.size() < count) {
             send(ctx, "§e⚠ Only §f" + attempted.size() + "§e names available (wanted " + count + ").");
             send(ctx, "§7Add more names to §fbotnames.txt§7 in resources.");
@@ -380,6 +403,10 @@ public class PvPBotCommand {
         send(ctx, "§7Pattern:  §f" + bot.getCombat().getCurrentPatternName());
         send(ctx, "§7Shield:   §f" + bot.getCombat().isShielding());
         send(ctx, "§7Mode:     §f" + bot.getConfig().mode.name());
+        send(ctx, "§7Path:     §f" + bot.getConfig().pathMode.name()
+                + " §7| Ledge: §f" + (bot.getConfig().ledgeLatchEnabled ? "ON" : "OFF"));
+        send(ctx, "§7RealWeb:  §f" + (bot.getConfig().realisticWebbing ? "ON" : "OFF")
+                + " §7| SameTick: §f" + (bot.getConfig().allowSameTickAttacks ? "ON" : "OFF"));
         send(ctx, "§7Revenge:  §f" + bot.getConfig().revengeMode);
         send(ctx, "§7BreachMace: §f" + (bot.getInventory().hasBreachMace() ? "§aYES" : "§7none"));
         send(ctx, "§7Faction:  §f" + (bot.getFaction() != null ? bot.getFaction() : "none"));
@@ -495,22 +522,72 @@ public class PvPBotCommand {
         if (bot == null) return 0;
 
         BotConfig.BotMode mode = switch (modeName.toLowerCase()) {
-            case "crit"  -> BotConfig.BotMode.CRIT;
-            case "smp"   -> BotConfig.BotMode.SMP;
-            default       -> BotConfig.BotMode.COMBO;
+            case "crit", "aggressive", "aggro" -> BotConfig.BotMode.AGGRESSIVE;
+            case "smp", "defensive", "defense" -> BotConfig.BotMode.DEFENSIVE;
+            case "adaptive", "adapt", "combo"  -> BotConfig.BotMode.ADAPTIVE;
+            default                              -> BotConfig.BotMode.ADAPTIVE;
         };
 
         bot.getConfig().mode = mode;
+        // Rebuild from difficulty baseline first so changing /pb mode repeatedly
+        // cannot stack old modifiers on top of each other.
+        bot.getConfig().applyDifficulty();
         bot.getConfig().applyMode();
 
         sendSuccess(ctx, "§f" + botName + "§a mode → §f" + mode.name());
         switch (mode) {
-            case CRIT  -> send(ctx, "§7High crit frequency. Less strafing. Aggressive.");
-            case COMBO -> send(ctx, "§7Balanced combos + crits. Default behaviour.");
-            case SMP   -> send(ctx, "§7Less strafe. Shield prediction. More deliberate hits.");
+            case CRIT, AGGRESSIVE -> send(ctx, "§7Aggressive: higher crit pressure, faster attacks, closer range.");
+            case COMBO, ADAPTIVE  -> send(ctx, "§7Adaptive: balanced pressure with improved crit and combo choices.");
+            case SMP, DEFENSIVE   -> send(ctx, "§7Defensive: safer spacing, shield reads, more deliberate hits.");
         }
         send(ctx, "§7Crit: §f" + bot.getConfig().critChancePercent
                 + "% §7| Cooldown: §f" + bot.getConfig().attackCooldownTicks + " ticks");
+        return 1;
+    }
+
+
+    private static int execSettingsGui(CommandContext<ServerCommandSource> ctx) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+        ServerPlayerEntity player;
+        try { player = ctx.getSource().getPlayerOrThrow(); }
+        catch (Exception e) { sendError(ctx, "Must be run by a player to open the GUI."); return 0; }
+
+        player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
+                (syncId, inv, p) -> new SettingsGuiHandler(syncId, inv, bot),
+                Text.literal("PvPBot Settings: " + botName)));
+        return 1;
+    }
+
+    private static int execPath(CommandContext<ServerCommandSource> ctx, String pathName) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+
+        BotConfig.PathMode mode = switch (pathName.toLowerCase()) {
+            case "legacy" -> BotConfig.PathMode.LEGACY;
+            default -> BotConfig.PathMode.SAFE;
+        };
+        bot.getConfig().pathMode = mode;
+
+        sendSuccess(ctx, "§f" + botName + "§a path mode → §f" + mode.name());
+        switch (mode) {
+            case SAFE -> send(ctx, "§7SAFE: avoids ledges/holes while moving and retreating.");
+            case LEGACY -> send(ctx, "§7LEGACY: original aggressive movement without ledge checks.");
+        }
+        return 1;
+    }
+
+    private static int execLedge(CommandContext<ServerCommandSource> ctx, boolean enabled) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+        bot.getConfig().ledgeLatchEnabled = enabled;
+        sendSuccess(ctx, "§f" + botName + "§a ledge latch → §f" + (enabled ? "ON" : "OFF"));
+        send(ctx, enabled
+                ? "§7The bot will try to grab nearby ledges while falling."
+                : "§7The bot will no longer alter falling movement for ledge saves.");
         return 1;
     }
 

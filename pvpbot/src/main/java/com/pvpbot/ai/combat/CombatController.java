@@ -907,6 +907,45 @@ public class CombatController {
     // Helpers
     // =========================================================================
 
+    /**
+     * Web pressure fallback — placed in the tick pipeline before the normal
+     * combo loop. If the target has been confirmed trapped in a cobweb for
+     * long enough, the bot abandons crit-waiting and hits directly so it
+     * doesn't stall while the target is helpless.
+     *
+     * Also enforces the same-tick attack guard: when
+     * {@code cfg.allowSameTickAttacks} is false, no second attack is allowed
+     * within the same server tick.
+     *
+     * @return true if this method handled the situation and the caller should
+     *         return immediately (either an attack fired or the tick was blocked).
+     */
+    private boolean tickWebbedPressureAttack(ServerPlayerEntity target) {
+        // Same-tick guard
+        if (!cfg.allowSameTickAttacks) {
+            long now = bot.getFakePlayer().getServerWorld().getTime();
+            if (now == lastAttackGameTime) return true;
+        }
+
+        if (!isTargetInCobweb(target)) {
+            targetInWebTicks = 0;
+            return false;
+        }
+        targetInWebTicks++;
+
+        // Short confirmation window — don't react to a single-tick cobweb glance.
+        int needed = cobwebTrapActive ? WEB_CONFIRM_TICKS_BUBBLE : WEB_CONFIRM_TICKS;
+        if (targetInWebTicks < needed) return false;
+
+        // Target is confirmed stuck. Abandon crit-wait and land a direct hit.
+        waitingForCrit    = false;
+        pendingRetryTicks = 0;
+        if (attackCooldown > 0) return false;
+        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return false;
+
+        return tryAttackTarget(target);
+    }
+
     private boolean isTargetInCobweb(ServerPlayerEntity target) {
         ServerWorld world = (ServerWorld) bot.getFakePlayer().getWorld();
         BlockPos feet = target.getBlockPos();
@@ -935,6 +974,7 @@ public class CombatController {
         if (shielding) return false;
         if (!isWithinMeleeAttackRange(target)) return false;
         bot.getFakePlayer().attack(target);
+        lastAttackGameTime = bot.getFakePlayer().getServerWorld().getTime();
         setNextAttackCooldown();
         return true;
     }

@@ -614,6 +614,29 @@ public class PvPBotCommand {
     // =========================================================================
 
 
+    /**
+     * /pvpbot gui <botName>
+     * Opens the vanilla chest-style settings GUI for the named bot.
+     * Must be run by a player (not the console).
+     */
+    private static int execSettingsGui(CommandContext<ServerCommandSource> ctx) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+
+        ServerCommandSource src = ctx.getSource();
+        if (!(src.getEntity() instanceof ServerPlayerEntity player)) {
+            sendError(ctx, "This command must be run by a player, not the console.");
+            return 0;
+        }
+
+        player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
+                (syncId, inv, p) -> new SettingsGuiHandler(syncId, inv, bot),
+                Text.literal("§6PvPBot Settings — " + botName)
+        ));
+        return 1;
+    }
+
     private static int execAiEngine(CommandContext<ServerCommandSource> ctx, String engineName) {
         String botName = StringArgumentType.getString(ctx, "botName");
         PvPBotEntity bot = getBot(ctx, botName);

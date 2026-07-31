@@ -79,6 +79,20 @@ public class BotConfig {
     /** If true, bot retaliates when hit by a player. */
     public boolean revengeMode = false;
 
+    /**
+     * If true, cobweb placement only fires when the target is on the ground
+     * (no mid-air bubbles). Conserves webs and looks more realistic.
+     * If false, the old double-block bubble behaviour is used.
+     */
+    public boolean realisticWebbing = false;
+
+    /**
+     * If false, the bot is prevented from landing two attacks in the same
+     * server tick. This avoids impossible hit-rates and keeps behaviour
+     * within vanilla-like bounds. Default true preserves legacy behaviour.
+     */
+    public boolean allowSameTickAttacks = true;
+
     /** Current combat mode — affects crit chance, strafe, accuracy. */
     public BotMode mode = BotMode.COMBO;
 

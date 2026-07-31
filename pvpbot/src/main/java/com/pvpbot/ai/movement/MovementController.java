@@ -19,11 +19,11 @@ public class MovementController {
     private int strafeTimer = 0;
     private boolean sprinting       = false;
     private boolean jumpCritPending = false;
-
-    private int knockbackSuppressTicks = 0;
     private int blockedTicks = 0;
     private int stuckTicks = 0;
     private Vec3d lastPosForStuckCheck = null;
+
+    private int knockbackSuppressTicks = 0;
 
     private static final int KNOCKBACK_SUPPRESS_TICKS = 6;
 
@@ -372,21 +372,13 @@ public class MovementController {
         BlockState feetState = world.getBlockState(feet);
         BlockState headState = world.getBlockState(head);
 
-        if (isPassable(feetState, world, feet) && isPassable(headState, world, head)) return true;
+        if (feetState.isAir() && headState.isAir()) return true;
 
         // One-block step-up is fine if there is head clearance; two-block walls/trees
         // are not, so steering picks a side instead of ramming the obstacle.
         BlockPos stepClear = head.up();
-        boolean solidStep = !isPassable(feetState, world, feet) && feetState.isSolidBlock(world, feet);
-        return solidStep
-                && isPassable(headState, world, head)
-                && isPassable(world.getBlockState(stepClear), world, stepClear)
-                && fp.isOnGround();
-    }
-
-
-    private boolean isPassable(BlockState state, net.minecraft.world.WorldView world, BlockPos pos) {
-        return state.isAir() || state.getCollisionShape(world, pos).isEmpty();
+        boolean solidStep = !feetState.isAir() && feetState.isSolidBlock(world, feet);
+        return solidStep && headState.isAir() && world.getBlockState(stepClear).isAir() && fp.isOnGround();
     }
 
     private void tryJumpOverObstacle(EntityPlayerMPFake fp, double dx, double dz) {
@@ -403,9 +395,9 @@ public class MovementController {
         BlockPos clearAbove = headAhead.up();
 
         BlockState feetState = world.getBlockState(feetAhead);
-        boolean blockedAtFeet = !isPassable(feetState, world, feetAhead) && feetState.isSolidBlock(world, feetAhead);
-        boolean openAtHead = isPassable(world.getBlockState(headAhead), world, headAhead);
-        boolean openAboveJump = isPassable(world.getBlockState(clearAbove), world, clearAbove);
+        boolean blockedAtFeet = !feetState.isAir() && feetState.isSolidBlock(world, feetAhead);
+        boolean openAtHead = world.getBlockState(headAhead).isAir();
+        boolean openAboveJump = world.getBlockState(clearAbove).isAir();
 
         if (blockedAtFeet && openAtHead && openAboveJump) {
             Vec3d vel = fp.getVelocity();
@@ -426,15 +418,13 @@ public class MovementController {
             BlockState feetState = world.getBlockState(feet);
             BlockState headState = world.getBlockState(head);
 
-            if (!isPassable(feetState, world, feet)) {
-                if (feetState.isSolidBlock(world, feet)
-                        && isPassable(headState, world, head)
-                        && isPassable(world.getBlockState(head.up()), world, head.up())) {
+            if (!feetState.isAir()) {
+                if (feetState.isSolidBlock(world, feet) && headState.isAir() && world.getBlockState(head.up()).isAir()) {
                     continue; // climbable one-block step
                 }
                 return false;
             }
-            if (!isPassable(headState, world, head)) return false;
+            if (!headState.isAir()) return false;
 
             boolean foundSupport = false;
             for (int drop = 1; drop <= dropLimit; drop++) {
@@ -486,8 +476,8 @@ public class MovementController {
                     );
                     BlockState support = world.getBlockState(ledge.down());
                     if (support.isAir() || !support.isSolidBlock(world, ledge.down())) continue;
-                    if (!isPassable(world.getBlockState(ledge), world, ledge)) continue;
-                    if (!isPassable(world.getBlockState(ledge.up()), world, ledge.up())) continue;
+                    if (!world.getBlockState(ledge).isAir()) continue;
+                    if (!world.getBlockState(ledge.up()).isAir()) continue;
 
                     double cx = ledge.getX() + 0.5;
                     double cz = ledge.getZ() + 0.5;

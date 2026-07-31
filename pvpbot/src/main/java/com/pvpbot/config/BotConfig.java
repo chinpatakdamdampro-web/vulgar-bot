@@ -85,11 +85,9 @@ public class BotConfig {
     /** Movement safety profile — LEGACY keeps old behavior, SAFE avoids holes/ledges. */
     public PathMode pathMode = PathMode.SAFE;
 
-    /** Realistic webbing places one feet web only when target is grounded. */
-    public boolean realisticWebbing = true;
-
-    /** If false, this bot cannot perform two attack() calls in the same server tick. */
-    public boolean allowSameTickAttacks = false;
+    // Safe rollout: keep legacy combat by default, allow opt-in v2.
+    public enum CombatEngine { LEGACY, V2 }
+    public CombatEngine combatEngine = CombatEngine.LEGACY;
 
     /** When true, falling bots try to grab/push into nearby ledges to reduce lethal falls. */
     public boolean ledgeLatchEnabled = true;
@@ -144,6 +142,11 @@ public class BotConfig {
         ADAPTIVE,
         /** New name for SMP-style safe play. */
         DEFENSIVE
+    }
+
+    public enum PathMode {
+        LEGACY,
+        SAFE
     }
 
     public enum PathMode {

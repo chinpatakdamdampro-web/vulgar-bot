@@ -51,6 +51,13 @@ public class CombatController {
     private int attackCooldown = 0;
     private long lastAttackGameTime = Long.MIN_VALUE;
 
+    // Out-of-range recovery: prevents stale combo states
+    private int outOfRangeTicks = 0;
+    private static final int OUT_OF_RANGE_RESET_TICKS = 12;
+
+    // Anti-whiff retry: tiny delay before abandoning a swing
+    private int pendingRetryTicks = 0;
+
     // Sprint reset (w-tap)
     private int sprintResetTimer = 0;
 
@@ -141,6 +148,9 @@ public class CombatController {
             return;
         }
 
+        // Combat-engine hook (v2 rollout safety). Currently no-op for behavior parity.
+        tickCombatEngineHook();
+
         // Cobweb cooldown countdown
         if (cobwebCooldown > 0) cobwebCooldown--;
         if (turtleMasterCooldown > 0) turtleMasterCooldown--;
@@ -218,12 +228,20 @@ public class CombatController {
         // minimum when fighting another fake player so collision doesn't create a
         // dead-zone where both bots only keep moving.
         boolean targetWebbedForMelee = isTargetInCobweb(target);
-        // Webbed targets can be pressed directly against the bot by collision/web drag.
-        // Do not enforce the normal minimum spacing there, or the bot can stare at
-        // a trapped player without swinging because it is "too close".
-        double minRangeSq = targetWebbedForMelee ? 0.0 : (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
+        double minRangeSq = targetWebbedForMelee ? 0.25 : (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
-        if (distSq < minRangeSq || distSq > maxRangeSq) return;
+        if (distSq < minRangeSq || distSq > maxRangeSq) {
+            outOfRangeTicks++;
+            if (outOfRangeTicks >= OUT_OF_RANGE_RESET_TICKS) {
+                comboStep = 0;
+                waitingForCrit = false;
+                pendingRetryTicks = 0;
+                pickNewPattern();
+                outOfRangeTicks = 0;
+            }
+            return;
+        }
+        outOfRangeTicks = 0;
 
         // Weapon cooldown check
         if (fp.getAttackCooldownProgress(0) < 0.9f) return;
@@ -244,6 +262,17 @@ public class CombatController {
         // Execute combo pattern
         executeComboStep(target);
     }
+
+
+    private void tickCombatEngineHook() {
+        // Intentionally conservative:
+        // keep full legacy behavior even if V2 is selected until V2 internals are fully implemented.
+        // This prevents gameplay regressions during rollout.
+        if (cfg.combatEngine == BotConfig.CombatEngine.V2) {
+            // future: predictive aiming/spacing modules
+        }
+    }
+
 
     // =========================================================================
     // Retreat tick
@@ -347,6 +376,26 @@ public class CombatController {
     private static final int COBWEB_COOLDOWN_BREACH       = 400; // 20s â€” other difficulties
     private static final int ORBITAL_TRIGGER_CHANCE_PCT   = 40;  // % chance per check
 
+
+    private boolean botStandingInCobweb() {
+        var world = (ServerWorld) bot.getFakePlayer().getWorld();
+        BlockPos feet = bot.getFakePlayer().getBlockPos();
+        return world.getBlockState(feet).isOf(Blocks.COBWEB)
+                || world.getBlockState(feet.up()).isOf(Blocks.COBWEB);
+    }
+
+    private int nearbyBotCount(double radius) {
+        EntityPlayerMPFake self = bot.getFakePlayer();
+        double r2 = radius * radius;
+        int c = 0;
+        for (ServerPlayerEntity p : self.getServerWorld().getPlayers()) {
+            if (!(p instanceof EntityPlayerMPFake)) continue;
+            if (p == self) continue;
+            if (self.squaredDistanceTo(p) <= r2) c++;
+        }
+        return c;
+    }
+
     private void tickCobwebTrap(ServerPlayerEntity target) {
         if (cobwebCooldown > 0) return;
         if (!inventory.hasCobwebs(2)) return;
@@ -356,10 +405,19 @@ public class CombatController {
             return;
         }
 
+        // avoid placing new trap if bot is already tangled in web
+        if (botStandingInCobweb()) return;
+
         // Only trigger when target is within 4 blocks
         double distSq = targeting.distanceToTargetSq();
         if (distSq > 16.0) return;
 
+        // Scale trap chance down when many bots are nearby to prevent web spam
+        int nearbyBots = nearbyBotCount(20.0);
+        int triggerChancePct = nearbyBots >= 5 ? 35 : 100;
+        if (rng.nextInt(100) >= triggerChancePct) return;
+
+        // Place cobweb bubble at target's feet and one block up
         var targetFeet = target.getBlockPos();
         boolean placedFeet;
         boolean placedHead = false;
@@ -599,9 +657,11 @@ public class CombatController {
         // Threat active when:
         //  - Target has mace, is at least 1.5 blocks above, and has started falling
         //  - OR target is falling fast (any weapon) from 1.5+ blocks above
+        // Keep shield up aggressively while incoming falling threat exists
+        // widened vertical window helps prevent free mace hits when target descends fast
         boolean threatActive =
-                (hasMace   && heightDiff > 1.5 && targetVelY < -0.08)
-                || (heightDiff > 1.5 && targetVelY < -0.3);
+                (hasMace   && heightDiff > 1.2 && targetVelY < -0.04)
+                || (heightDiff > 1.2 && targetVelY < -0.22);
 
         if (threatActive) {
             maceThreatGraceTicks = MACE_THREAT_GRACE;
@@ -771,21 +831,30 @@ public class CombatController {
                 boolean isFalling  = bot.getFakePlayer().getVelocity().y < -0.05;
                 boolean isOnGround = bot.getFakePlayer().isOnGround();
                 boolean timedOut   = breachSwapStep1Timeout >= BREACH_SWAP_TIMEOUT;
+                boolean selfWebbed = botStandingInCobweb();
 
-                if (isFalling) {
+                if (isFalling || timedOut) {
+                    // Falling naturally = crit. Timed out = force swing anyway.
                     if (!tryAttackTarget(target)) { finishCombo(); return; }
                     inventory.scheduleSwapBackToSword();
                     breachSwapStep1Timeout = 0;
                     finishCombo();
                 } else if (isOnGround) {
+                    // If we are webbed ourselves avoid jump-crit dead state
+                    if (selfWebbed) {
+                        if (!tryAttackTarget(target)) { finishCombo(); return; }
+                        inventory.scheduleSwapBackToSword();
+                        breachSwapStep1Timeout = 0;
+                        finishCombo();
+                        return;
+                    }
                     movement.jumpForCrit();
                     waitingForCrit = true;
                     breachSwapStep1Timeout = 0;
                     comboStep = 2;
                 } else if (timedOut) {
-                    // If the crit setup fails while the target is webbed, do not stare.
-                    // Fall back to a normal sword hit so trapped players still take damage.
-                    if (tryWebbedFallbackAttack(target)) return;
+                    // Do not dump a mostly non-crit mace swing after webbing.
+                    // Reset instead so the next grounded tick starts a clean jump-crit.
                     waitingForCrit = false;
                     breachSwapStep1Timeout = 0;
                     comboStep = 1;
@@ -802,9 +871,6 @@ public class CombatController {
                     breachSwapStep1Timeout = 0;
                     finishCombo();
                 } else if (breachSwapStep1Timeout >= BREACH_SWAP_TIMEOUT) {
-                    // Jump never became a crit arc. While the target is webbed, swap
-                    // back and use a normal hit instead of looping forever.
-                    if (tryWebbedFallbackAttack(target)) return;
                     waitingForCrit = false;
                     breachSwapStep1Timeout = 0;
                     comboStep = 1;
@@ -848,6 +914,7 @@ public class CombatController {
                 || world.getBlockState(feet.up()).isOf(Blocks.COBWEB);
     }
 
+
     // Strict melee reach guard to prevent impossible hits while targets are far
     // above/below or otherwise outside vanilla-like melee distance.
     private boolean isWithinMeleeAttackRange(ServerPlayerEntity target) {
@@ -867,93 +934,29 @@ public class CombatController {
     private boolean tryAttackTarget(ServerPlayerEntity target) {
         if (shielding) return false;
         if (!isWithinMeleeAttackRange(target)) return false;
-        if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().attack(target);
         setNextAttackCooldown();
         return true;
     }
 
-    private boolean commitAttackThisTick() {
-        if (cfg.allowSameTickAttacks) return true;
-        long now = bot.getFakePlayer().getServerWorld().getTime();
-        if (lastAttackGameTime == now) return false;
-        lastAttackGameTime = now;
-        return true;
-    }
-
-    private boolean tickWebbedPressureAttack(ServerPlayerEntity target) {
-        if (!isTargetInCobweb(target)) return false;
-        if (shielding) return false;
-        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return false;
-
-        EntityPlayerMPFake fp = bot.getFakePlayer();
-        double dx = target.getX() - fp.getX();
-        double dz = target.getZ() - fp.getZ();
-        double horizontalDistSq = dx * dx + dz * dz;
-        boolean pointBlank = horizontalDistSq < 0.64;
-
-        if (currentPattern == ComboPattern.BREACH_SWAP && comboStep > 0) {
-            // Do not steal the crit window early. Only fall back to a normal
-            // breach mace hit after the crit setup actually times out.
-            if (breachSwapStep1Timeout < BREACH_SWAP_TIMEOUT) return false;
-            return tryWebbedBreachFallbackAttack(target);
-        }
-
-        if (inventory.hasBreachMace()) {
-            // Web trap should prefer breach swap pressure over plain sword hits.
-            currentPattern = ComboPattern.BREACH_SWAP;
-            comboStep = 1;
-            attackCooldown = 0;
-            breachSwapStep1Timeout = 0;
-            waitingForCrit = false;
+    private boolean tryAttackTargetWithRetry(ServerPlayerEntity target) {
+        if (pendingRetryTicks > 0) {
+            pendingRetryTicks--;
             return false;
         }
 
-        if (!pointBlank) return false;
-        return tryWebbedNormalAttack(target);
-    }
+        if (!isWithinMeleeAttackRange(target)) {
+            // Schedule a short retry to reduce whiffs when target is barely out of reach
+            pendingRetryTicks = 1 + rng.nextInt(2); // 1-2 ticks
+            return false;
+        }
 
-    private boolean tryWebbedFallbackAttack(ServerPlayerEntity target) {
-        if (!isTargetInCobweb(target)) return false;
-        return tryWebbedBreachFallbackAttack(target);
-    }
-
-    private boolean tryWebbedBreachFallbackAttack(ServerPlayerEntity target) {
-        if (shielding) return false;
-        if (!isWithinMeleeAttackRange(target)) return false;
-        if (!inventory.equipBreachMace()) return tryWebbedNormalAttack(target);
-
-        waitingForCrit = false;
-        breachSwapStep1Timeout = 0;
-        bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
-        if (!commitAttackThisTick()) return false;
-        bot.getFakePlayer().attack(target);
-        inventory.scheduleSwapBackToSword();
-        attackCooldown = 3 + rng.nextInt(2);
-        comboStep = 0;
-        pickNewPattern();
-        return true;
-    }
-
-    private boolean tryWebbedNormalAttack(ServerPlayerEntity target) {
-        if (shielding) return false;
-        if (!isWithinMeleeAttackRange(target)) return false;
-
-        waitingForCrit = false;
-        breachSwapStep1Timeout = 0;
-        inventory.equipBestWeapon(false);
-        bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
-        if (!commitAttackThisTick()) return false;
-        bot.getFakePlayer().attack(target);
-        attackCooldown = 3 + rng.nextInt(2);
-        comboStep = 0;
-        pickNewPattern();
-        return true;
+        pendingRetryTicks = 0;
+        return tryAttackTarget(target);
     }
 
     private void swingAt(ServerPlayerEntity target) {
-        if (shielding) return;
-        if (!tryAttackTarget(target)) return;
+        if (!tryAttackTargetWithRetry(target)) return;
     }
 
     private void queueJumpCrit() {
@@ -970,6 +973,8 @@ public class CombatController {
 
     private void finishCombo() {
         comboStep      = 0;
+        outOfRangeTicks = 0;
+        pendingRetryTicks = 0;
         waitingForCrit = false;
         if (rng.nextInt(100) < cfg.sprintResetChancePercent) {
             movement.sprintReset();

@@ -101,20 +101,22 @@ public class PvPBotCommand {
                 .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
                     .then(literal("crit") .executes(ctx -> execMode(ctx, "crit")))
                     .then(literal("combo").executes(ctx -> execMode(ctx, "combo")))
-                    .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))
-                    .then(literal("aggressive").executes(ctx -> execMode(ctx, "aggressive")))
-                    .then(literal("adaptive")  .executes(ctx -> execMode(ctx, "adaptive")))
-                    .then(literal("defensive") .executes(ctx -> execMode(ctx, "defensive")))))
+                    .then(literal("smp")  .executes(ctx -> execMode(ctx, "smp")))))
             .then(literal("path")
                 .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
                     .then(literal("safe").executes(ctx -> execPath(ctx, "safe")))
                     .then(literal("legacy").executes(ctx -> execPath(ctx, "legacy")))))
+
+            // /pb ai <bot> <legacy|v2>
+            .then(literal("ai")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
+                    .then(literal("legacy").executes(ctx -> execAiEngine(ctx, "legacy")))
+                    .then(literal("v2")    .executes(ctx -> execAiEngine(ctx, "v2")))))
             .then(literal("ledge")
                 .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES)
                     .then(literal("on").executes(ctx -> execLedge(ctx, true)))
                     .then(literal("off").executes(ctx -> execLedge(ctx, false)))))
-            .then(literal("gui")
-                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES).executes(PvPBotCommand::execSettingsGui)))
+
 
             // /pb config — persistent server config
             .then(literal("config")
@@ -194,11 +196,9 @@ public class PvPBotCommand {
         send(ctx, "§e/pb diff §f<bot> <easy|medium|hard|ultrahard>");
         send(ctx, "§7  easy§7=slow  §emedium§7=default  §chard§7=fast  §4ultrahard§7=Str3");
         send(ctx, "§6§l── Combat Mode ──");
-        send(ctx, "§e/pb mode §f<bot> <aggressive|adaptive|defensive> §7Set combat style");
-        send(ctx, "§7  old aliases still work: §fcrit§7, §fcombo§7, §fsmp");
+        send(ctx, "§e/pb mode §f<bot> <crit|combo|smp> §7Set combat style");
         send(ctx, "§e/pb path §f<bot> <safe|legacy>   §7Pathing safety profile");
         send(ctx, "§e/pb ledge §f<bot> <on|off>       §7Falling ledge latch toggle");
-        send(ctx, "§e/pvpbot gui §f<bot>              §7Open vanilla settings GUI");
         send(ctx, "§6§l── Global Settings ──");
         send(ctx, "§e/pb settings §fRevenge <true|false>  §7Revenge for ALL bots + save");
         send(ctx, "§e/pb config setdefault §f<diff>       §7Default difficulty for new spawns");
@@ -405,8 +405,6 @@ public class PvPBotCommand {
         send(ctx, "§7Mode:     §f" + bot.getConfig().mode.name());
         send(ctx, "§7Path:     §f" + bot.getConfig().pathMode.name()
                 + " §7| Ledge: §f" + (bot.getConfig().ledgeLatchEnabled ? "ON" : "OFF"));
-        send(ctx, "§7RealWeb:  §f" + (bot.getConfig().realisticWebbing ? "ON" : "OFF")
-                + " §7| SameTick: §f" + (bot.getConfig().allowSameTickAttacks ? "ON" : "OFF"));
         send(ctx, "§7Revenge:  §f" + bot.getConfig().revengeMode);
         send(ctx, "§7BreachMace: §f" + (bot.getInventory().hasBreachMace() ? "§aYES" : "§7none"));
         send(ctx, "§7Faction:  §f" + (bot.getFaction() != null ? bot.getFaction() : "none"));
@@ -545,21 +543,6 @@ public class PvPBotCommand {
         return 1;
     }
 
-
-    private static int execSettingsGui(CommandContext<ServerCommandSource> ctx) {
-        String botName = StringArgumentType.getString(ctx, "botName");
-        PvPBotEntity bot = getBot(ctx, botName);
-        if (bot == null) return 0;
-        ServerPlayerEntity player;
-        try { player = ctx.getSource().getPlayerOrThrow(); }
-        catch (Exception e) { sendError(ctx, "Must be run by a player to open the GUI."); return 0; }
-
-        player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
-                (syncId, inv, p) -> new SettingsGuiHandler(syncId, inv, bot),
-                Text.literal("PvPBot Settings: " + botName)));
-        return 1;
-    }
-
     private static int execPath(CommandContext<ServerCommandSource> ctx, String pathName) {
         String botName = StringArgumentType.getString(ctx, "botName");
         PvPBotEntity bot = getBot(ctx, botName);
@@ -590,6 +573,7 @@ public class PvPBotCommand {
                 : "§7The bot will no longer alter falling movement for ledge saves.");
         return 1;
     }
+
 
     // =========================================================================
     // /pb settings Revenge <true|false>
@@ -628,6 +612,28 @@ public class PvPBotCommand {
     // =========================================================================
     // /pb diff <bot> <easy|medium|hard|ultrahard>
     // =========================================================================
+
+
+    private static int execAiEngine(CommandContext<ServerCommandSource> ctx, String engineName) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        PvPBotEntity bot = getBot(ctx, botName);
+        if (bot == null) return 0;
+
+        BotConfig.CombatEngine engine = switch (engineName.toLowerCase()) {
+            case "v2" -> BotConfig.CombatEngine.V2;
+            default   -> BotConfig.CombatEngine.LEGACY;
+        };
+
+        bot.setCombatEngine(engine);
+        sendSuccess(ctx, "§f" + botName + "§a combat engine → §f" + engine.name() + " §7(safe mode)");
+        if (engine == BotConfig.CombatEngine.LEGACY) {
+            send(ctx, "§7Legacy engine: maximum stability.");
+        } else {
+            send(ctx, "§7V2 engine selected. Currently compatibility mode (no risky behavior override yet).");
+        }
+        return 1;
+    }
+
 
     private static int execDiff(CommandContext<ServerCommandSource> ctx, String diffName) {
         String botName = StringArgumentType.getString(ctx, "botName");

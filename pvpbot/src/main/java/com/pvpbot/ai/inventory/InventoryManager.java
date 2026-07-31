@@ -607,35 +607,12 @@ public class InventoryManager {
         var inv = fp.getInventory();
         for (int i = 0; i < 36; i++) {
             ItemStack stack = inv.getStack(i);
-            if (!isOrbitalStrikeToken(stack)) continue;
-
-            var data = stack.get(DataComponentTypes.CUSTOM_DATA);
-            if (data != null && data.copyNbt().getInt("UsesLeft") == -1) {
-                return true;
-            }
-
-            if (stack.isDamageable()) {
-                stack.damage(1, fp, EquipmentSlot.MAINHAND);
-            } else {
-                stack.decrement(1);
-            }
+            if (!stack.isOf(Items.FISHING_ROD)) continue;
+            stack.decrement(1);
             if (stack.isEmpty()) inv.setStack(i, ItemStack.EMPTY);
             return true;
         }
         return false;
-    }
-
-    private boolean isOrbitalStrikeToken(ItemStack stack) {
-        if (stack.isEmpty()) return false;
-
-        var data = stack.get(DataComponentTypes.CUSTOM_DATA);
-        if (data != null && data.copyNbt().contains("StabShotRod")) {
-            return true;
-        }
-
-        Item item = stack.getItem();
-        String className = item.getClass().getSimpleName();
-        return className.equals("StabRodItem");
     }
 
     /**

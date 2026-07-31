@@ -16,6 +16,7 @@ import com.pvpbot.util.DebugSystem;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -166,6 +167,11 @@ public class PvPBotCommand {
                         .then(argument("targetPlayer", EntityArgumentType.player())
                             .executes(PvPBotCommand::execFactionAttack)))))
         );
+
+        dispatcher.register(literal("pvpbot")
+            .requires(src -> src.hasPermissionLevel(2))
+            .then(literal("gui")
+                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES).executes(PvPBotCommand::execSettingsGui))));
     }
 
     // =========================================================================
@@ -300,15 +306,15 @@ public class PvPBotCommand {
             return 0;
         }
 
-        send(ctx, "§7Mass-spawning §f" + count + "§7 bots...");
+        send(ctx, "§7Queueing §f" + count + "§7 bots for safe staggered spawning...");
         DEBUG.log(src, "massSpawn count=" + count + ", available names=" + names.size());
 
         BotConfig cfg = PvPBotConfigFile.getInstance().buildDefaultConfig();
         List<String> attempted = BotSpawner.massSpawn(
                 src.getServer(), src.getWorld(), src.getPosition(), count, cfg);
 
-        sendSuccess(ctx, "Spawned §f" + attempted.size() + "§a bots: §7" + String.join(", ", attempted));
-        send(ctx, "§7Registration may take §f4 seconds §7for each bot to appear.");
+        sendSuccess(ctx, "Queued §f" + attempted.size() + "§a bots: §7" + String.join(", ", attempted));
+        send(ctx, "§7Bots spawn gradually to avoid lag spikes and registration crashes.");
         if (attempted.size() < count) {
             send(ctx, "§e⚠ Only §f" + attempted.size() + "§e names available (wanted " + count + ").");
             send(ctx, "§7Add more names to §fbotnames.txt§7 in resources.");
@@ -514,9 +520,10 @@ public class PvPBotCommand {
         if (bot == null) return 0;
 
         BotConfig.BotMode mode = switch (modeName.toLowerCase()) {
-            case "crit"  -> BotConfig.BotMode.CRIT;
-            case "smp"   -> BotConfig.BotMode.SMP;
-            default       -> BotConfig.BotMode.COMBO;
+            case "crit", "aggressive", "aggro" -> BotConfig.BotMode.AGGRESSIVE;
+            case "smp", "defensive", "defense" -> BotConfig.BotMode.DEFENSIVE;
+            case "adaptive", "adapt", "combo"  -> BotConfig.BotMode.ADAPTIVE;
+            default                              -> BotConfig.BotMode.ADAPTIVE;
         };
 
         bot.getConfig().mode = mode;
@@ -527,9 +534,9 @@ public class PvPBotCommand {
 
         sendSuccess(ctx, "§f" + botName + "§a mode → §f" + mode.name());
         switch (mode) {
-            case CRIT  -> send(ctx, "§7High crit frequency. Less strafing. Aggressive.");
-            case COMBO -> send(ctx, "§7Balanced combos + crits. Default behaviour.");
-            case SMP   -> send(ctx, "§7Less strafe. Shield prediction. More deliberate hits.");
+            case CRIT, AGGRESSIVE -> send(ctx, "§7Aggressive: higher crit pressure, faster attacks, closer range.");
+            case COMBO, ADAPTIVE  -> send(ctx, "§7Adaptive: balanced pressure with improved crit and combo choices.");
+            case SMP, DEFENSIVE   -> send(ctx, "§7Defensive: safer spacing, shield reads, more deliberate hits.");
         }
         send(ctx, "§7Crit: §f" + bot.getConfig().critChancePercent
                 + "% §7| Cooldown: §f" + bot.getConfig().attackCooldownTicks + " ticks");

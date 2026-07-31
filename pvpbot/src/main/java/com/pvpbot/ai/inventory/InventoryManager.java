@@ -44,6 +44,10 @@ public class InventoryManager {
     // =========================================================================
 
     public void tick() {
+        ServerPlayerEntity fp = bot.getFakePlayer();
+        // Do not auto-swap away from an actively raised shield, food, potion, or rod.
+        if (fp.isUsingItem()) return;
+
         // Swap back to sword after axe/mace hit
         if (swapBackTimer > 0) {
             swapBackTimer--;

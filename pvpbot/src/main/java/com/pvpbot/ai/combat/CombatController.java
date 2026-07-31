@@ -49,6 +49,7 @@ public class CombatController {
 
     // Attack timing
     private int attackCooldown = 0;
+    private long lastAttackGameTime = Long.MIN_VALUE;
 
     // Out-of-range recovery: prevents stale combo states
     private int outOfRangeTicks = 0;
@@ -179,15 +180,14 @@ public class CombatController {
         tickOrbitalStrike(target);
 
 
-        // Mace/falling-player shield â€” mainhand block
-        if (!hasTotem) {
-            // Only raise mainhand shield if no totem protecting us
-            updateMaceBlock(target);
-        }
+        // Mace/falling-player shield — mainhand block.
+        // Mainhand shielding can work while a totem stays in offhand, so do not
+        // skip this just because the bot has totem protection.
+        updateMaceBlock(target);
         if (shieldLockout > 0) { shieldLockout--; return; }
 
         // SMP shield predict (offhand-style, low priority)
-        if (cfg.mode == BotConfig.BotMode.SMP && !hasTotem) {
+        if (isDefensiveMode() && !hasTotem) {
             tickSmpShieldPredict(target);
             if (smpShieldTimer > 0) { smpShieldTimer--; return; }
         }
@@ -198,6 +198,10 @@ public class CombatController {
         } else {
             checkAndDisableTargetShield(target);
         }
+
+        // Web pressure fallback: if a trapped target is body-blocking the bot or
+        // a crit setup is taking too long, use normal hits instead of staring.
+        if (tickWebbedPressureAttack(target)) return;
 
         // Sprint reset cooldown
         if (sprintResetTimer > 0) {
@@ -415,8 +419,18 @@ public class CombatController {
 
         // Place cobweb bubble at target's feet and one block up
         var targetFeet = target.getBlockPos();
-        boolean placedFeet = inventory.placeCobwebAt(targetFeet);
-        boolean placedHead = inventory.placeCobwebAt(targetFeet.up());
+        boolean placedFeet;
+        boolean placedHead = false;
+
+        if (cfg.realisticWebbing) {
+            // Realistic mode: no mid-air webbing, conserve webs, place only feet web.
+            if (!target.isOnGround()) return;
+            placedFeet = inventory.placeCobwebAt(targetFeet);
+        } else {
+            // Hard/unrealistic mode: old bubble behavior remains available.
+            placedFeet = inventory.placeCobwebAt(targetFeet);
+            placedHead = inventory.placeCobwebAt(targetFeet.up());
+        }
         if (!placedFeet && !placedHead) return;
 
         boolean isUltraHard = cfg.difficulty == BotConfig.Difficulty.ULTRA_HARD;
@@ -671,6 +685,7 @@ public class CombatController {
     private void raiseMaceBlock(ServerPlayerEntity incomingAttacker) {
         if (shielding) return;
         inventory.ensureShieldInMainhand();
+        if (!bot.getFakePlayer().getMainHandStack().isOf(Items.SHIELD)) return;
         movement.lookAtTarget(incomingAttacker);
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         shielding        = true;
@@ -683,6 +698,7 @@ public class CombatController {
     private void raiseSmpShield() {
         if (shielding) return;
         inventory.ensureShieldInOffhand();
+        if (!bot.getFakePlayer().getOffHandStack().isOf(Items.SHIELD)) return;
         bot.getFakePlayer().setCurrentHand(Hand.OFF_HAND);
         shielding        = true;
         shieldInMainhand = false;
@@ -707,7 +723,7 @@ public class CombatController {
     // =========================================================================
 
     private void executeComboStep(ServerPlayerEntity target) {
-        if (cfg.mode == BotConfig.BotMode.CRIT) {
+        if (isAggressiveMode()) {
             doCritModeStep(target);
             return;
         }
@@ -744,7 +760,7 @@ public class CombatController {
         switch (comboStep) {
             case 0, 1 -> { swingAt(target); comboStep++; }
             case 2 -> {
-                if (cfg.mode != BotConfig.BotMode.SMP || rng.nextDouble() > cfg.strafeFrequency) {
+                if (!isDefensiveMode() || rng.nextDouble() > cfg.strafeFrequency) {
                     movement.sprintReset();
                     sprintResetTimer = 5 + rng.nextInt(4);
                 }
@@ -971,7 +987,7 @@ public class CombatController {
         comboStep = 0;
         boolean hasBreachMace = inventory.hasBreachMace();
 
-        if (cfg.mode == BotConfig.BotMode.SMP) {
+        if (isDefensiveMode()) {
             if (hasBreachMace) {
                 ComboPattern[] p = { ComboPattern.SPRINT_HITS, ComboPattern.JUMP_RESET,
                                      ComboPattern.SHIELD_BAIT, ComboPattern.BREACH_SWAP };
@@ -995,6 +1011,15 @@ public class CombatController {
                 currentPattern = p[rng.nextInt(p.length)];
             }
         }
+    }
+
+
+    private boolean isAggressiveMode() {
+        return cfg.mode == BotConfig.BotMode.CRIT || cfg.mode == BotConfig.BotMode.AGGRESSIVE;
+    }
+
+    private boolean isDefensiveMode() {
+        return cfg.mode == BotConfig.BotMode.SMP || cfg.mode == BotConfig.BotMode.DEFENSIVE;
     }
 
     private void resetPartial() {

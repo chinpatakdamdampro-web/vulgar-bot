@@ -1,8 +1,8 @@
-name: Build PvPBot 1.21.1
+name: Build PvPBot Codex 1.21.1
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ fix-bot-combat-behavior-h9tgtr, dev ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:

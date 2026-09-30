@@ -7,6 +7,7 @@ import com.pvpbot.faction.FactionManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 
@@ -20,7 +21,7 @@ import java.util.*;
  *
  * Fixes:
  *  - If fake player already in world, register directly without calling createFake again.
- *  - Auto-retry: schedules a second registration attempt 4 seconds later if first fails.
+ *  - Auto-retry: schedules registration checks without repeatedly calling createFake.
  *  - massspawn: pulls names from botnames.txt resource file.
  */
 public class BotSpawner {
@@ -104,9 +105,10 @@ public class BotSpawner {
             return botEntity;
         }
 
-        // Player spawned but not in list yet — schedule retry in 4 seconds (80 ticks)
-        PvPBotMod.LOGGER.warn("[PvPBot] Bot '{}' not found immediately — retry queued.", name);
-        BotManager.getInstance().scheduleRetry(name, world, pos, config, 80);
+        // Player spawned but not in list yet — schedule registration checks.
+        // Do not call createFake repeatedly; it can lag/crash the server when many bots spawn.
+        PvPBotMod.LOGGER.warn("[PvPBot] Bot '{}' not found immediately — registration check queued.", name);
+        BotManager.getInstance().scheduleRetry(name, world, pos, config, 20);
         return null;
     }
 
@@ -134,8 +136,9 @@ public class BotSpawner {
         int toSpawn = Math.min(count, available.size());
         for (int i = 0; i < toSpawn; i++) {
             String name = available.get(i);
-            attempted.add(name);
-            spawn(server, world, name, pos, config);
+            if (BotManager.getInstance().queueSpawn(world, name, pos, config)) {
+                attempted.add(name);
+            }
         }
         return attempted;
     }
@@ -145,21 +148,15 @@ public class BotSpawner {
     // -------------------------------------------------------------------------
 
     public static boolean remove(MinecraftServer server, String name) {
-        FactionManager.getInstance().removeBot(name);
-
-        PvPBotEntity bot = BotManager.getInstance().get(name);
-        if (bot != null) {
-            if (!bot.getFakePlayer().isRemoved()) bot.getFakePlayer().kill();
-            BotManager.getInstance().unregister(name);
-            return true;
-        }
-
-        // Try unregistered fake player
+        // Match Carpet's `/player <name> disconnect`: manual removal is an
+        // administrative disconnect, not a lethal hit that leaves a dead fake
+        // player behind in the player manager.
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(name);
-        if (player instanceof EntityPlayerMPFake fake) {
-            fake.kill();
-            return true;
-        }
-        return false;
+        if (!(player instanceof EntityPlayerMPFake fake)) return false;
+
+        FactionManager.getInstance().removeBot(name);
+        BotManager.getInstance().unregister(name);
+        fake.fakePlayerDisconnect(Text.empty());
+        return true;
     }
 }

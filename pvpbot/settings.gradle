@@ -2,6 +2,9 @@ pluginManagement {
     repositories {
         maven { url 'https://maven.fabricmc.net/' }
         gradlePluginPortal()
+        // Fabric Loom's build-time dependencies (Gson, Guava, ASM, and
+        // commons-io) are published to Maven Central, not the Fabric repo.
+        mavenCentral()
     }
 }
 rootProject.name = "pvpbot"

@@ -81,7 +81,9 @@ public class PvPBotEntity {
     }
 
     private void tickIdle() {
-        // Nothing — bot waits for a command or a revenge trigger
+        // Keep idle bots still. This clears leftover jump/strafe velocity from
+        // cancelled combat so stopped bots do not hop around randomly.
+        movementController.stop();
     }
 
     private void tickFollow() {
@@ -183,31 +185,31 @@ public class PvPBotEntity {
 
     /**
      * Attempts to find the player who most recently damaged this bot using
-     * Minecraft's damage tracking. Falls back to nearest real player.
+     * Minecraft's damage tracking. Includes both real players and fake players
+     * so bot-vs-bot revenge works.
      */
     private ServerPlayerEntity findAttacker() {
         // Use the recent attacker from Minecraft's built-in damage tracking
         var attacker = fakePlayer.getAttacker();
-        if (attacker instanceof ServerPlayerEntity sp
-                && !(sp instanceof carpet.patches.EntityPlayerMPFake)) {
+        if (attacker instanceof ServerPlayerEntity sp && sp != fakePlayer) {
             return sp;
         }
         // Try recent damage source
         var recentSource = fakePlayer.getRecentDamageSource();
         if (recentSource != null && recentSource.getAttacker() instanceof ServerPlayerEntity sp
-                && !(sp instanceof carpet.patches.EntityPlayerMPFake)) {
+                && sp != fakePlayer) {
             return sp;
         }
         return null;
     }
 
-    /** Fallback: find the nearest real (non-fake) player in the world. */
+    /** Fallback: find the nearest player (real or fake), excluding self. */
     private ServerPlayerEntity findNearestRealPlayer() {
         ServerPlayerEntity nearest = null;
         double nearestDistSq = Double.MAX_VALUE;
         for (ServerPlayerEntity p : fakePlayer.getServerWorld().getPlayers()) {
             if (p == fakePlayer) continue;
-            if (p instanceof carpet.patches.EntityPlayerMPFake) continue;
+            // Include fake players too so revenge can chain into bot-vs-bot fights.
             double d = fakePlayer.squaredDistanceTo(p);
             if (d < nearestDistSq) { nearestDistSq = d; nearest = p; }
         }
@@ -226,18 +228,28 @@ public class PvPBotEntity {
      */
     private void applyDifficultyEffects() {
         if (config.difficulty == BotConfig.Difficulty.ULTRA_HARD) {
-            var existing = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
+            var strength = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
+            var resistance = fakePlayer.getStatusEffect(StatusEffects.RESISTANCE);
             // Refresh every 60 ticks (3 seconds) when duration drops below 100 ticks (5s)
-            if (existing == null || existing.getDuration() < 100) {
+            if (strength == null || strength.getDuration() < 100) {
                 // amplifier 2 = Strength III (0-indexed: 0=I, 1=II, 2=III)
                 fakePlayer.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.STRENGTH, 200, 2, false, false, false)
                 );
             }
+            if (resistance == null || resistance.getDuration() < 100) {
+                // amplifier 0 = Resistance I
+                fakePlayer.addStatusEffect(
+                    new StatusEffectInstance(StatusEffects.RESISTANCE, 200, 0, false, false, false)
+                );
+            }
         } else {
-            // Remove any lingering Strength from a previous Ultra Hard session
+            // Remove any lingering Ultra Hard effects from a previous session
             if (fakePlayer.hasStatusEffect(StatusEffects.STRENGTH)) {
                 fakePlayer.removeStatusEffect(StatusEffects.STRENGTH);
+            }
+            if (fakePlayer.hasStatusEffect(StatusEffects.RESISTANCE)) {
+                fakePlayer.removeStatusEffect(StatusEffects.RESISTANCE);
             }
         }
     }
@@ -276,6 +288,9 @@ public class PvPBotEntity {
         // Remove Ultra Hard strength effect when bot is stopped
         if (fakePlayer.hasStatusEffect(StatusEffects.STRENGTH)) {
             fakePlayer.removeStatusEffect(StatusEffects.STRENGTH);
+        }
+        if (fakePlayer.hasStatusEffect(StatusEffects.RESISTANCE)) {
+            fakePlayer.removeStatusEffect(StatusEffects.RESISTANCE);
         }
         setState(BotState.IDLE);
     }

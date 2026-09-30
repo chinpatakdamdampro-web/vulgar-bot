@@ -167,7 +167,7 @@ public class BotManager {
     private void tickRegisteredBots(MinecraftServer server) {
         bots.entrySet().removeIf(entry -> {
             PvPBotEntity bot = entry.getValue();
-            if (!bot.isAlive()) {
+            if (hasBotDied(bot)) {
                 handleBotDeath(server, bot);
                 FactionManager.getInstance().removeBot(entry.getKey());
                 PvPBotMod.LOGGER.info("[PvPBot] Bot {} died/left, unregistering.", entry.getKey());
@@ -182,6 +182,16 @@ public class BotManager {
         });
     }
 
+    /**
+     * Carpet fake players can remain connected for the death-screen tick before
+     * their entity becomes removed. Health reaching zero is therefore the first
+     * reliable server-side signal that the leave-on-death option must act on.
+     */
+    private boolean hasBotDied(PvPBotEntity bot) {
+        EntityPlayerMPFake fake = bot.getFakePlayer();
+        return fake == null || fake.isRemoved() || !fake.isAlive() || fake.getHealth() <= 0.0f;
+    }
+
     private void handleBotDeath(MinecraftServer server, PvPBotEntity bot) {
         EntityPlayerMPFake fake = bot.getFakePlayer();
         String name = bot.getName();
@@ -189,7 +199,9 @@ public class BotManager {
 
         Text deathMessage;
         try {
-            deathMessage = fake.getDamageTracker().getDeathMessage();
+            deathMessage = fake != null
+                    ? fake.getDamageTracker().getDeathMessage()
+                    : Text.literal(name + " died");
         } catch (Exception e) {
             deathMessage = Text.literal(name + " died");
         }
@@ -198,7 +210,8 @@ public class BotManager {
         // Carpet's `/player <name> disconnect` command resolves to this exact
         // fake-player API call. Keep it configurable so server owners can leave
         // dead bots connected when they want to inspect them after a fight.
-        if (bot.getConfig().leaveOnDeath && server.getPlayerManager().getPlayer(name) == fake) {
+        if (bot.getConfig().leaveOnDeath && fake != null
+                && server.getPlayerManager().getPlayer(name) == fake) {
             fake.fakePlayerDisconnect(Text.empty());
         }
     }

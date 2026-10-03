@@ -21,20 +21,51 @@ public class PvPBotMod implements ModInitializer {
         LOGGER.info("[PvPBot] Initializing...");
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            // Load persistent config first (difficulty default, revenge mode)
-            PvPBotConfigFile.getInstance().load(server);
-            // Then init kit manager
-            KitManager.getInstance().init(server);
-            LOGGER.info("[PvPBot] Ready. Default difficulty: {}",
-                    PvPBotConfigFile.getInstance().getDefaultDifficulty());
+            LOGGER.info("[PvPBot] SERVER_STARTED — loading config...");
+            try {
+                PvPBotConfigFile.getInstance().load(server);
+                LOGGER.info("[PvPBot] Config loaded — difficulty={} revenge={} leaveOnDeath={}",
+                        PvPBotConfigFile.getInstance().getDefaultDifficulty(),
+                        PvPBotConfigFile.getInstance().getRevengeMode(),
+                        PvPBotConfigFile.getInstance().getLeaveOnDeath());
+            } catch (Exception e) {
+                LOGGER.error("[PvPBot] Failed to load config — using defaults", e);
+            }
+
+            LOGGER.info("[PvPBot] Initializing KitManager...");
+            try {
+                KitManager.getInstance().init(server);
+                LOGGER.info("[PvPBot] KitManager ready.");
+            } catch (Exception e) {
+                LOGGER.error("[PvPBot] KitManager init failed", e);
+            }
+
+            LOGGER.info("[PvPBot] Ready. /pb help for commands.");
         });
 
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                PvPBotCommand.register(dispatcher));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            LOGGER.info("[PvPBot] SERVER_STOPPING — active bots: {}",
+                    BotManager.getInstance().getBotNames());
+        });
 
-        ServerTickEvents.END_SERVER_TICK.register(server ->
-                BotManager.getInstance().tickAll(server));
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            LOGGER.info("[PvPBot] Registering commands...");
+            try {
+                PvPBotCommand.register(dispatcher);
+                LOGGER.info("[PvPBot] Commands registered.");
+            } catch (Exception e) {
+                LOGGER.error("[PvPBot] Command registration failed", e);
+            }
+        });
 
-        LOGGER.info("[PvPBot] Ready. /pb help for commands.");
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            try {
+                BotManager.getInstance().tickAll(server);
+            } catch (Exception e) {
+                LOGGER.error("[PvPBot] Uncaught exception in tick loop — bots may be in a bad state", e);
+            }
+        });
+
+        LOGGER.info("[PvPBot] Event hooks registered.");
     }
 }

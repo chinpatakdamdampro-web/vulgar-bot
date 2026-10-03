@@ -114,7 +114,7 @@ public class PvPBotCommand {
                     .then(literal("on").executes(ctx -> execLedge(ctx, true)))
                     .then(literal("off").executes(ctx -> execLedge(ctx, false)))))
             .then(literal("gui")
-                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES).executes(PvPBotCommand::execSettingsGui)))
+                .executes(PvPBotCommand::execSettingsGui))
 
             // /pb config — persistent server config
             .then(literal("config")
@@ -169,7 +169,7 @@ public class PvPBotCommand {
         dispatcher.register(literal("pvpbot")
             .requires(src -> src.hasPermissionLevel(2))
             .then(literal("gui")
-                .then(argument("botName", StringArgumentType.word()).suggests(BOT_NAMES).executes(PvPBotCommand::execSettingsGui))));
+                .executes(PvPBotCommand::execSettingsGui)));
     }
 
     // =========================================================================
@@ -198,7 +198,7 @@ public class PvPBotCommand {
         send(ctx, "§7  old aliases still work: §fcrit§7, §fcombo§7, §fsmp");
         send(ctx, "§e/pb path §f<bot> <safe|legacy>   §7Pathing safety profile");
         send(ctx, "§e/pb ledge §f<bot> <on|off>       §7Falling ledge latch toggle");
-        send(ctx, "§e/pvpbot gui §f<bot>              §7Open vanilla settings GUI");
+        send(ctx, "§e/pvpbot gui                    §7Open global settings GUI");
         send(ctx, "§6§l── Global Settings ──");
         send(ctx, "§e/pb settings §fRevenge <true|false>  §7Revenge for ALL bots + save");
         send(ctx, "§e/pb config setdefault §f<diff>       §7Default difficulty for new spawns");
@@ -547,16 +547,13 @@ public class PvPBotCommand {
 
 
     private static int execSettingsGui(CommandContext<ServerCommandSource> ctx) {
-        String botName = StringArgumentType.getString(ctx, "botName");
-        PvPBotEntity bot = getBot(ctx, botName);
-        if (bot == null) return 0;
         ServerPlayerEntity player;
         try { player = ctx.getSource().getPlayerOrThrow(); }
         catch (Exception e) { sendError(ctx, "Must be run by a player to open the GUI."); return 0; }
 
         player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
-                (syncId, inv, p) -> new SettingsGuiHandler(syncId, inv, bot),
-                Text.literal("PvPBot Settings: " + botName)));
+                (syncId, inv, p) -> new SettingsGuiHandler(syncId, inv),
+                Text.literal("PvPBot Global Settings")));
         return 1;
     }
 

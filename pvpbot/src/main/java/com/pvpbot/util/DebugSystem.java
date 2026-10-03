@@ -1,6 +1,7 @@
 package com.pvpbot.util;
 
 import com.pvpbot.PvPBotMod;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 
@@ -11,8 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * DebugSystem — global debug mode manager.
  *
- * When debug mode is ON for a player, all /pb commands print
- * verbose step-by-step output directly to that player's chat.
+ * When debug mode is ON for a player, all /pb commands AND internal
+ * tick-loop events (deaths, disconnects, config reads) print verbose
+ * output directly to that player's chat via broadcast().
  *
  * Usage:
  *   /pb debug on   — enables debug for the sender
@@ -25,7 +27,13 @@ public class DebugSystem {
     /** Set of player names with debug mode enabled. */
     private final Set<String> debugPlayers = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
+    /** Held so broadcast() can reach online players from the tick loop. */
+    private MinecraftServer server = null;
+
     private DebugSystem() {}
+
+    /** Called once on SERVER_STARTED so broadcast() has a server reference. */
+    public void setServer(MinecraftServer server) { this.server = server; }
 
     public static DebugSystem getInstance() { return INSTANCE; }
 
@@ -38,6 +46,20 @@ public class DebugSystem {
         PvPBotMod.LOGGER.info("[PvPBot DEBUG] {}", message);
         if (debugPlayers.contains(src.getName())) {
             src.sendFeedback(() -> Text.literal("§8[§bDBG§8] §7" + message), false);
+        }
+    }
+
+    /**
+     * Broadcast a debug message to all players who have debug mode on.
+     * Use this from the tick loop where there is no ServerCommandSource.
+     */
+    public void broadcast(String message) {
+        PvPBotMod.LOGGER.info("[PvPBot DEBUG] {}", message);
+        if (server == null || debugPlayers.isEmpty()) return;
+        Text text = Text.literal("§8[§bDBG§8] §7" + message);
+        for (String name : debugPlayers) {
+            var player = server.getPlayerManager().getPlayer(name);
+            if (player != null) player.sendMessage(text, false);
         }
     }
 

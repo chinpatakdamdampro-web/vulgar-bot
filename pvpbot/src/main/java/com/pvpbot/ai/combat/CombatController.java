@@ -927,6 +927,7 @@ public class CombatController {
         if (shielding) return false;
         if (!isWithinMeleeAttackRange(target)) return false;
         if (!commitAttackThisTick()) return false;
+        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
         setNextAttackCooldown();
         return true;
@@ -986,6 +987,7 @@ public class CombatController {
         breachSwapStep1Timeout = 0;
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         if (!commitAttackThisTick()) return false;
+        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
         inventory.scheduleSwapBackToSword();
         attackCooldown = 3 + rng.nextInt(2);
@@ -1003,6 +1005,7 @@ public class CombatController {
         inventory.equipBestWeapon(false);
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         if (!commitAttackThisTick()) return false;
+        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;

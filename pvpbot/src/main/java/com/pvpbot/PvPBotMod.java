@@ -4,6 +4,7 @@ import com.pvpbot.command.PvPBotCommand;
 import com.pvpbot.config.PvPBotConfigFile;
 import com.pvpbot.entity.BotManager;
 import com.pvpbot.kit.KitManager;
+import com.pvpbot.util.DebugSystem;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -21,6 +22,7 @@ public class PvPBotMod implements ModInitializer {
         LOGGER.info("[PvPBot] Initializing...");
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            DebugSystem.getInstance().setServer(server);
             LOGGER.info("[PvPBot] SERVER_STARTED — loading config...");
             try {
                 PvPBotConfigFile.getInstance().load(server);

@@ -4,6 +4,7 @@ import carpet.patches.EntityPlayerMPFake;
 import com.pvpbot.PvPBotMod;
 import com.pvpbot.config.BotConfig;
 import com.pvpbot.faction.FactionManager;
+import com.pvpbot.util.DebugSystem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -157,7 +158,15 @@ public class BotManager {
     private void tickRegisteredBots(MinecraftServer server) {
         bots.entrySet().removeIf(entry -> {
             PvPBotEntity bot = entry.getValue();
-            if (hasBotDied(bot)) {
+            EntityPlayerMPFake fake = bot.getFakePlayer();
+
+            boolean died = hasBotDied(bot);
+            if (died) {
+                DebugSystem.getInstance().broadcast(
+                    "hasBotDied=true for '" + bot.getName() + "' — " +
+                    "fake=" + (fake == null ? "null" : "ok") +
+                    (fake != null ? " removed=" + fake.isRemoved() + " alive=" + fake.isAlive() + " hp=" + fake.getHealth() : "")
+                );
                 handleBotDeath(server, bot);
                 FactionManager.getInstance().removeBot(entry.getKey());
                 PvPBotMod.LOGGER.info("[PvPBot] Bot {} died/left, unregistering.", entry.getKey());
@@ -180,7 +189,16 @@ public class BotManager {
     private void handleBotDeath(MinecraftServer server, PvPBotEntity bot) {
         EntityPlayerMPFake fake = bot.getFakePlayer();
         String name = bot.getName();
-        if (!deathHandled.add(name)) return;
+
+        if (!deathHandled.add(name)) {
+            DebugSystem.getInstance().broadcast("handleBotDeath: '" + name + "' already handled, skipping.");
+            return;
+        }
+
+        DebugSystem.getInstance().broadcast(
+            "handleBotDeath: '" + name + "' leaveOnDeath=" + bot.getConfig().leaveOnDeath +
+            " fake=" + (fake == null ? "null" : "ok")
+        );
 
         Text deathMessage;
         try {
@@ -192,15 +210,10 @@ public class BotManager {
         }
         server.getPlayerManager().broadcast(deathMessage, false);
 
-        if (bot.getConfig().leaveOnDeath && fake != null) {
-            // Schedule via server.execute() so it runs at the start of the next
-            // server tick, after Carpet's own onDeath() sequence has fully completed.
-            // We capture the fake reference directly — no player-manager lookup —
-            // which avoids the identity-check race that caused the original bug.
-            server.execute(() -> {
-                PvPBotMod.LOGGER.info("[PvPBot] Disconnecting dead bot '{}'", name);
-                fake.fakePlayerDisconnect(Text.empty());
-            });
-        }
+        // leaveOnDeath disconnect is handled in PvPBotEntity.checkRevenge() at the
+        // moment health first hits zero — before the entity is dead — because this
+        // fork's NetHandlerPlayServerFake routes disconnect() through kill(), which
+        // is a no-op on an already-dead entity. Nothing to do here.
+        DebugSystem.getInstance().broadcast("handleBotDeath cleanup for '" + name + "' (disconnect already fired if leaveOnDeath=true)");
     }
 }

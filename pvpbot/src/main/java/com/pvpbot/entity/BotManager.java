@@ -28,6 +28,14 @@ public class BotManager {
     private static final int SPAWN_QUEUE_INTERVAL_TICKS = 5;
     private static final int MAX_SPAWN_QUEUE_SIZE = 128;
 
+    /**
+     * How many ticks to wait after health hits zero before calling
+     * fakePlayerDisconnect. This lets Carpet finish its own onDeath()
+     * sequence (death message, item drops, stat tracking) before we
+     * disconnect the fake player. One tick is enough; two is safer.
+     */
+    private static final int DEATH_DISCONNECT_DELAY_TICKS = 2;
+
     private final Map<String, PvPBotEntity> bots = new ConcurrentHashMap<>();
     private final Set<String> deathHandled = ConcurrentHashMap.newKeySet();
 
@@ -37,6 +45,13 @@ public class BotManager {
 
     private record SpawnEntry(ServerWorld world, String name, Vec3d pos, BotConfig config) {}
     private final Queue<SpawnEntry> spawnQueue = new ArrayDeque<>();
+
+    /**
+     * Bots that have died and are waiting DEATH_DISCONNECT_DELAY_TICKS before
+     * their fake player is disconnected. Key = bot name, value = the tick on
+     * which the disconnect should fire.
+     */
+    private final Map<String, Integer> pendingDisconnects = new ConcurrentHashMap<>();
 
     private int retryTickCounter = 0;
     private int nextSpawnQueueTick = 0;
@@ -50,6 +65,7 @@ public class BotManager {
     public void register(PvPBotEntity bot) {
         bots.put(bot.getName(), bot);
         deathHandled.remove(bot.getName());
+        pendingDisconnects.remove(bot.getName());
         retryQueue.removeIf(entry -> entry.name().equalsIgnoreCase(bot.getName()));
         synchronized (spawnQueue) {
             spawnQueue.removeIf(entry -> entry.name().equalsIgnoreCase(bot.getName()));
@@ -59,6 +75,7 @@ public class BotManager {
 
     public void unregister(String name) {
         bots.remove(name);
+        pendingDisconnects.remove(name);
         retryQueue.removeIf(entry -> entry.name().equalsIgnoreCase(name));
         synchronized (spawnQueue) {
             spawnQueue.removeIf(entry -> entry.name().equalsIgnoreCase(name));
@@ -116,6 +133,7 @@ public class BotManager {
         processSpawnQueue(server);
         processRegistrationRetries(server);
         tickRegisteredBots(server);
+        processPendingDisconnects(server);
     }
 
     private void processSpawnQueue(MinecraftServer server) {
@@ -192,11 +210,27 @@ public class BotManager {
         return fake == null || fake.isRemoved() || !fake.isAlive() || fake.getHealth() <= 0.0f;
     }
 
+    /**
+     * Broadcasts the death message immediately, then schedules the disconnect
+     * for DEATH_DISCONNECT_DELAY_TICKS later.
+     *
+     * The delay is necessary because when health first hits 0, Carpet's own
+     * onDeath() sequence (item drops, stat updates, death message packets) has
+     * not necessarily completed yet. Calling fakePlayerDisconnect() in the same
+     * tick races with that sequence and causes the disconnect to silently fail —
+     * the player manager's getPlayer() check succeeds but the internal state is
+     * inconsistent, so Carpet's network handler swallows the disconnect.
+     *
+     * By scheduling the call via server.execute() one tick later, we allow
+     * Carpet to complete its death sequence on this tick, and our disconnect
+     * fires cleanly on the next server tick.
+     */
     private void handleBotDeath(MinecraftServer server, PvPBotEntity bot) {
         EntityPlayerMPFake fake = bot.getFakePlayer();
         String name = bot.getName();
         if (!deathHandled.add(name)) return;
 
+        // Broadcast death message immediately (this part is safe mid-tick).
         Text deathMessage;
         try {
             deathMessage = fake != null
@@ -207,12 +241,42 @@ public class BotManager {
         }
         server.getPlayerManager().broadcast(deathMessage, false);
 
-        // Carpet's `/player <name> disconnect` command resolves to this exact
-        // fake-player API call. Keep it configurable so server owners can leave
-        // dead bots connected when they want to inspect them after a fight.
-        if (bot.getConfig().leaveOnDeath && fake != null
-                && server.getPlayerManager().getPlayer(name) == fake) {
-            fake.fakePlayerDisconnect(Text.empty());
+        // Schedule the disconnect for DEATH_DISCONNECT_DELAY_TICKS later.
+        // We do NOT call fakePlayerDisconnect() here directly — see javadoc above.
+        if (bot.getConfig().leaveOnDeath && fake != null) {
+            pendingDisconnects.put(name, retryTickCounter + DEATH_DISCONNECT_DELAY_TICKS);
+            PvPBotMod.LOGGER.info("[PvPBot] Scheduled disconnect for '{}' in {} ticks",
+                    name, DEATH_DISCONNECT_DELAY_TICKS);
         }
+    }
+
+    /**
+     * Fires pending disconnects whose delay has elapsed.
+     *
+     * We no longer check server.getPlayerManager().getPlayer(name) == fake
+     * because the player-manager identity check can fail in the same tick that
+     * Carpet is doing its own internal housekeeping. Instead we check that the
+     * fake player object itself is non-null. If Carpet already disconnected it
+     * (e.g. on a server with leaveOnDeath=true in CarpetPvP settings),
+     * fakePlayerDisconnect() is a safe no-op.
+     */
+    private void processPendingDisconnects(MinecraftServer server) {
+        pendingDisconnects.entrySet().removeIf(entry -> {
+            if (retryTickCounter < entry.getValue()) return false; // not yet due
+
+            String name = entry.getKey();
+            // Look up the fake player by name — by now it may already be gone
+            // (Carpet cleaned it up), which is fine.
+            var player = server.getPlayerManager().getPlayer(name);
+            if (player instanceof EntityPlayerMPFake fake) {
+                PvPBotMod.LOGGER.info("[PvPBot] Disconnecting dead bot '{}'", name);
+                fake.fakePlayerDisconnect(Text.empty());
+            } else {
+                // Player is already gone (Carpet cleaned it up, or it was a real player
+                // that somehow shared the name). Either way, nothing to do.
+                PvPBotMod.LOGGER.info("[PvPBot] Bot '{}' already disconnected before pending disconnect fired.", name);
+            }
+            return true; // remove from pending regardless
+        });
     }
 }

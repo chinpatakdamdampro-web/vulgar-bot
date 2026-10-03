@@ -37,6 +37,7 @@ public class PvPBotConfigFile {
     private static class Data {
         String  defaultDifficulty = "medium";
         boolean revengeMode       = false;
+        boolean leaveOnDeath      = true;
     }
 
     private Data data = new Data();
@@ -90,10 +91,14 @@ public class PvPBotConfigFile {
     public boolean getRevengeMode()            { return data.revengeMode; }
     public void    setRevengeMode(boolean rev) { data.revengeMode = rev; save(); }
 
+    public boolean getLeaveOnDeath()             { return data.leaveOnDeath; }
+    public void    setLeaveOnDeath(boolean val)  { data.leaveOnDeath = val; save(); }
+
     /** Returns a fresh BotConfig built from the persisted default difficulty. */
     public BotConfig buildDefaultConfig() {
         BotConfig cfg = BotConfig.forDifficulty(data.defaultDifficulty);
-        cfg.revengeMode = data.revengeMode;
+        cfg.revengeMode  = data.revengeMode;
+        cfg.leaveOnDeath = data.leaveOnDeath;
         return cfg;
     }
 }

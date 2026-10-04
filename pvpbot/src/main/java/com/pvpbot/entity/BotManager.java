@@ -7,7 +7,6 @@ import com.pvpbot.faction.FactionManager;
 import com.pvpbot.util.DebugSystem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.*;
@@ -200,17 +199,11 @@ public class BotManager {
             " fake=" + (fake == null ? "null" : "ok")
         );
 
-        Text deathMessage;
-        try {
-            deathMessage = fake != null
-                    ? fake.getDamageTracker().getDeathMessage()
-                    : Text.literal(name + " died");
-        } catch (Exception e) {
-            deathMessage = Text.literal(name + " died");
-        }
-        server.getPlayerManager().broadcast(deathMessage, false);
+        // Death message and disconnect are both handled in PvPBotMod's ALLOW_DEATH
+        // event, which fires before onDeath() while the entity is still registered.
+        // Nothing to broadcast here — it already happened.
 
-        // leaveOnDeath disconnect is handled in PvPBotEntity.checkRevenge() at the
+        // leaveOnDeath disconnect is handled in PvPBotMod's ALLOW_DEATH event at the
         // moment health first hits zero — before the entity is dead — because this
         // fork's NetHandlerPlayServerFake routes disconnect() through kill(), which
         // is a no-op on an already-dead entity. Nothing to do here.

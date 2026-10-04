@@ -71,26 +71,27 @@ public class PvPBotMod implements ModInitializer {
                 return true;
             }
 
-            LOGGER.info("[PvPBot] Bot '{}' dying — broadcasting death message then disconnecting.", name);
-            DebugSystem.getInstance().broadcast(
-                "ALLOW_DEATH: '" + name + "' hp=" + fake.getHealth() +
-                " — broadcasting death message then calling fakePlayerDisconnect");
-
-            // Broadcast the death message first so it appears in chat before the
-            // "X left the game" message, exactly like a real player death.
-            // getDamageTracker() is populated during damage processing before this
-            // event fires, so the correct killer name is already in there.
-            try {
-                Text deathMessage = fake.getDamageTracker().getDeathMessage();
-                fake.getServer().getPlayerManager().broadcast(deathMessage, false);
-            } catch (Exception e) {
-                LOGGER.warn("[PvPBot] Could not get death message for '{}': {}", name, e.getMessage());
+            // Totem guard: if a totem of undying saved the bot, health will be > 0
+            // by the time we reach here. Skip the disconnect — the bot survived.
+            if (fake.getHealth() > 0.0f) {
+                DebugSystem.getInstance().broadcast(
+                    "ALLOW_DEATH: '" + name + "' hp=" + fake.getHealth() +
+                    " > 0 (totem saved) — skipping disconnect");
+                return true;
             }
+
+            LOGGER.info("[PvPBot] Bot '{}' dying — disconnecting.", name);
+            DebugSystem.getInstance().broadcast(
+                "ALLOW_DEATH: '" + name + "' hp=0 confirmed — calling fakePlayerDisconnect");
+
+            // Do NOT broadcast the death message here — ALLOW_DEATH fires inside
+            // onDeath(), which broadcasts it naturally after we return true.
+            // Broadcasting here causes a duplicate message in chat.
 
             fake.fakePlayerDisconnect(Text.empty());
 
             DebugSystem.getInstance().broadcast("fakePlayerDisconnect returned for '" + name + "'");
-            return true; // let normal death proceed
+            return true; // let normal death proceed (broadcasts death message, handles stats, etc.)
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {

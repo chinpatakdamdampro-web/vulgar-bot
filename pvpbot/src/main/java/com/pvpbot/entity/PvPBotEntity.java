@@ -1,19 +1,16 @@
 package com.pvpbot.entity;
 
 import carpet.patches.EntityPlayerMPFake;
-import com.pvpbot.PvPBotMod;
 import com.pvpbot.ai.combat.CombatController;
 import com.pvpbot.ai.inventory.InventoryManager;
 import com.pvpbot.ai.movement.MovementController;
 import com.pvpbot.ai.targeting.TargetingSystem;
 import com.pvpbot.config.BotConfig;
-import com.pvpbot.util.DebugSystem;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
 
 public class PvPBotEntity {
 
@@ -144,19 +141,6 @@ public class PvPBotEntity {
         // Detect health drop (threshold 0.5 to avoid float noise)
         boolean wasHit = currentHealth < lastHealth - 0.5f;
         lastHealth = currentHealth;
-
-        // Detect killing blow — health just hit zero this tick while the entity
-        // is still technically alive. This is the only safe window to call
-        // fakePlayerDisconnect in this fork: the NetHandlerPlayServerFake in
-        // theobaldthebird's fork routes disconnect(Text) through kill(), which
-        // is a no-op once the entity is already dead. We must call it here,
-        // before Carpet/Minecraft processes the death.
-        if (currentHealth <= 0.0f && config.leaveOnDeath) {
-            PvPBotMod.LOGGER.info("[PvPBot] Bot '{}' health hit 0 — calling fakePlayerDisconnect", name);
-            DebugSystem.getInstance().broadcast("Bot '" + name + "' hp=0, calling fakePlayerDisconnect NOW");
-            fakePlayer.fakePlayerDisconnect(Text.empty());
-            return;
-        }
 
         if (!wasHit) return;
         if (!config.revengeMode) return;

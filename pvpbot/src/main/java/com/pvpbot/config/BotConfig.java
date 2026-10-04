@@ -16,8 +16,8 @@ public class BotConfig {
     // Combat timing
     // -------------------------------------------------------------------------
 
-    public int attackCooldownTicks       = 1;
-    public int attackTimingJitter        = 1;
+    public int attackCooldownTicks       = 11;
+    public int attackTimingJitter        = 3;
     public int strafeChangeTicks         = 12;
     public int critChancePercent         = 55;
     public int sprintResetChancePercent  = 50;
@@ -163,8 +163,8 @@ public class BotConfig {
     public void applyDifficulty() {
         switch (difficulty) {
             case EASY -> {
-                attackCooldownTicks      = 3;
-                attackTimingJitter       = 2;
+                attackCooldownTicks      = 22;
+                attackTimingJitter       = 8;
                 critChancePercent        = 10;
                 sprintResetChancePercent = 10;
                 minCps                   = 2.0f;
@@ -177,8 +177,8 @@ public class BotConfig {
                 preferredRange           = 2.8;
             }
             case MEDIUM -> {
-                attackCooldownTicks      = 1;
-                attackTimingJitter       = 1;
+                attackCooldownTicks      = 11;
+                attackTimingJitter       = 3;
                 critChancePercent        = 55;
                 sprintResetChancePercent = 50;
                 minCps                   = 7.0f;
@@ -191,8 +191,8 @@ public class BotConfig {
                 preferredRange           = 2.5;
             }
             case HARD -> {
-                attackCooldownTicks      = 1;
-                attackTimingJitter       = 1;
+                attackCooldownTicks      = 9;
+                attackTimingJitter       = 2;
                 critChancePercent        = 72;
                 sprintResetChancePercent = 65;
                 minCps                   = 10.0f;
@@ -206,8 +206,8 @@ public class BotConfig {
             }
             case ULTRA_HARD -> {
                 // Same timing stats as HARD
-                attackCooldownTicks      = 0;
-                attackTimingJitter       = 0;
+                attackCooldownTicks      = 8;
+                attackTimingJitter       = 1;
                 critChancePercent        = 80;
                 sprintResetChancePercent = 70;
                 minCps                   = 12.0f;
@@ -235,7 +235,7 @@ public class BotConfig {
                 sprintResetChancePercent = Math.min(90, sprintResetChancePercent + 10);
                 strafeFrequency          = Math.max(0.10, strafeFrequency - 0.15);
                 accuracyReduction        = Math.max(0.01, accuracyReduction - 0.05);
-                attackCooldownTicks      = Math.max(0, attackCooldownTicks - 1);
+                attackCooldownTicks      = Math.max(6, attackCooldownTicks - 2);
                 preferredRange           = Math.max(1.8, preferredRange - 0.25);
             }
             case COMBO, ADAPTIVE -> {
@@ -248,7 +248,7 @@ public class BotConfig {
                 sprintResetChancePercent = Math.max(20, sprintResetChancePercent - 10);
                 strafeFrequency          = Math.min(0.75, strafeFrequency + 0.20);
                 accuracyReduction        = Math.max(0.01, accuracyReduction - 0.07);
-                attackCooldownTicks      = Math.min(4, attackCooldownTicks + 1);
+                attackCooldownTicks      = Math.min(18, attackCooldownTicks + 1);
                 preferredRange           = Math.min(3.0, preferredRange + 0.25);
             }
         }

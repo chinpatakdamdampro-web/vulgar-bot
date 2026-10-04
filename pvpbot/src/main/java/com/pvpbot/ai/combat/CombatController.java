@@ -241,7 +241,7 @@ public class CombatController {
         if (distSq < minRangeSq || distSq > maxRangeSq) return;
 
         // Weapon cooldown check
-        if (fp.getAttackCooldownProgress(0) < 1.0f) return;
+        if (fp.getAttackCooldownProgress(0) < 0.9f) return;
 
         // Accuracy check
         if (!target.isOnGround() && rng.nextDouble() < cfg.accuracyReduction) return;
@@ -575,7 +575,7 @@ public class CombatController {
         if (!target.isBlocking()) return;
         double distSq = targeting.distanceToTargetSq();
         if (distSq > cfg.attackReach * cfg.attackReach) return;
-        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 1.0f) return;
+        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return;
 
         boolean hasAxe = inventory.equipBestAxe();
         if (!hasAxe) return;
@@ -944,7 +944,7 @@ public class CombatController {
     private boolean tickWebbedPressureAttack(ServerPlayerEntity target) {
         if (!isTargetInCobweb(target)) return false;
         if (shielding) return false;
-        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 1.0f) return false;
+        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return false;
 
         EntityPlayerMPFake fp = bot.getFakePlayer();
         double dx = target.getX() - fp.getX();

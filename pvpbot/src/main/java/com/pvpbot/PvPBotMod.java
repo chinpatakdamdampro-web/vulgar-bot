@@ -48,50 +48,36 @@ public class PvPBotMod implements ModInitializer {
             LOGGER.info("[PvPBot] Ready. /pb help for commands.");
         });
 
-        // ALLOW_DEATH fires the moment a LivingEntity's health reaches zero,
-        // BEFORE LivingEntity.onDeath() is called. At this point the fake player
-        // is still fully registered in PlayerManager — the only safe window to
-        // call fakePlayerDisconnect() in this fork.
-        //
-        // We match by UUID so we only act on the specific bot we spawned.
-        // We return true so Minecraft still processes the death normally.
-        ServerLivingEntityEvents.ALLOW_DEATH.register((entity, damageSource, damageAmount) -> {
-            if (!(entity instanceof EntityPlayerMPFake fake)) return true;
+        // AFTER_DEATH fires inside die() after death is fully confirmed — meaning
+        // the totem of undying check has already run and did NOT save the entity.
+        // Per Fabric API docs, ALLOW_DEATH fires AFTER the totem check, so if a
+        // totem saved the bot, ALLOW_DEATH never fires. But we use AFTER_DEATH
+        // instead because it fires inside die() which is only reached on a real
+        // death, making totem pops impossible to trigger by definition.
+        // The death message is broadcast naturally by die() before AFTER_DEATH fires.
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
+            if (!(entity instanceof EntityPlayerMPFake fake)) return;
 
             String name = fake.getName().getString();
             PvPBotEntity bot = BotManager.getInstance().get(name);
-            if (bot == null) return true;
+            if (bot == null) return;
 
             // UUID check — only act on our specific registered bot
-            if (!bot.getFakePlayer().getUuid().equals(fake.getUuid())) return true;
+            if (!bot.getFakePlayer().getUuid().equals(fake.getUuid())) return;
 
             if (!bot.getConfig().leaveOnDeath) {
                 DebugSystem.getInstance().broadcast(
-                    "ALLOW_DEATH: '" + name + "' leaveOnDeath=false, skipping disconnect.");
-                return true;
+                    "AFTER_DEATH: '" + name + "' leaveOnDeath=false, skipping disconnect.");
+                return;
             }
 
-            // Totem guard: if a totem of undying saved the bot, health will be > 0
-            // by the time we reach here. Skip the disconnect — the bot survived.
-            if (fake.getHealth() > 0.0f) {
-                DebugSystem.getInstance().broadcast(
-                    "ALLOW_DEATH: '" + name + "' hp=" + fake.getHealth() +
-                    " > 0 (totem saved) — skipping disconnect");
-                return true;
-            }
-
-            LOGGER.info("[PvPBot] Bot '{}' dying — disconnecting.", name);
+            LOGGER.info("[PvPBot] Bot '{}' confirmed dead — disconnecting.", name);
             DebugSystem.getInstance().broadcast(
-                "ALLOW_DEATH: '" + name + "' hp=0 confirmed — calling fakePlayerDisconnect");
-
-            // Do NOT broadcast the death message here — ALLOW_DEATH fires inside
-            // onDeath(), which broadcasts it naturally after we return true.
-            // Broadcasting here causes a duplicate message in chat.
+                "AFTER_DEATH: '" + name + "' — calling fakePlayerDisconnect");
 
             fake.fakePlayerDisconnect(Text.empty());
 
             DebugSystem.getInstance().broadcast("fakePlayerDisconnect returned for '" + name + "'");
-            return true; // let normal death proceed (broadcasts death message, handles stats, etc.)
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {

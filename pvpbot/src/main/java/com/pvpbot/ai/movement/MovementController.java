@@ -213,8 +213,12 @@ public class MovementController {
     public void jumpForCrit() {
         EntityPlayerMPFake fp = bot.getFakePlayer();
         if (!fp.isOnGround()) return;
-        Vec3d vel = fp.getVelocity();
-        fp.setVelocity(vel.x, 0.42, vel.z);
+        // Use jump() instead of setVelocity() — jump() sets the Y velocity AND
+        // triggers Minecraft's fallDistance tracking, which is required for a
+        // critical hit to register. setVelocity() only moves the entity visually
+        // but never increments fallDistance, so attacks always landed as normal
+        // hits even when the bot appeared to be falling.
+        fp.jump();
         jumpCritPending = true;
     }
 

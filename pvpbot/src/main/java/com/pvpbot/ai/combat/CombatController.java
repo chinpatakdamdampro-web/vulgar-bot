@@ -15,6 +15,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.Random;
+import com.pvpbot.ai.combat.WTapController;
 
 /**
  * CombatController â€” full PvP AI brain.
@@ -50,6 +51,9 @@ public class CombatController {
     // Attack timing
     private int attackCooldown = 0;
     private long lastAttackGameTime = Long.MIN_VALUE;
+
+    // W-tap controller — coordinates sprint-stop with weapon charge timing
+    private WTapController wTap;
 
     // Sprint reset (w-tap)
     private int sprintResetTimer = 0;
@@ -106,6 +110,7 @@ public class CombatController {
         this.movement  = movement;
         this.inventory = inventory;
         this.cfg       = bot.getConfig();
+        this.wTap      = new WTapController(cfg);
         pickNewPattern();
     }
 
@@ -240,8 +245,15 @@ public class CombatController {
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
         if (distSq < minRangeSq || distSq > maxRangeSq) return;
 
-        // Weapon cooldown check
-        if (fp.getAttackCooldownProgress(0) < 0.9f) return;
+        // W-tap: stop sprint at the configured charge threshold so the
+        // next hit delivers knockback from the momentum bleed.
+        float chargeProgress = fp.getAttackCooldownProgress(0);
+        if (wTap.shouldStopSprint(chargeProgress)) {
+            movement.sprintReset();
+        }
+
+        // Weapon cooldown check — wait until charge reaches attack threshold
+        if (!wTap.canAttack(chargeProgress)) return;
 
         // Accuracy check
         if (!target.isOnGround() && rng.nextDouble() < cfg.accuracyReduction) return;
@@ -575,7 +587,7 @@ public class CombatController {
         if (!target.isBlocking()) return;
         double distSq = targeting.distanceToTargetSq();
         if (distSq > cfg.attackReach * cfg.attackReach) return;
-        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return;
+        if (!wTap.canAttack(bot.getFakePlayer().getAttackCooldownProgress(0))) return;
 
         boolean hasAxe = inventory.equipBestAxe();
         if (!hasAxe) return;
@@ -929,6 +941,7 @@ public class CombatController {
         if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
+        wTap.onAttack();
         setNextAttackCooldown();
         return true;
     }
@@ -944,7 +957,7 @@ public class CombatController {
     private boolean tickWebbedPressureAttack(ServerPlayerEntity target) {
         if (!isTargetInCobweb(target)) return false;
         if (shielding) return false;
-        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return false;
+        if (!wTap.canAttack(bot.getFakePlayer().getAttackCooldownProgress(0))) return false;
 
         EntityPlayerMPFake fp = bot.getFakePlayer();
         double dx = target.getX() - fp.getX();
@@ -989,6 +1002,7 @@ public class CombatController {
         if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
+        wTap.onAttack();
         inventory.scheduleSwapBackToSword();
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;
@@ -1007,6 +1021,7 @@ public class CombatController {
         if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
+        wTap.onAttack();
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;
         pickNewPattern();
@@ -1097,6 +1112,7 @@ public class CombatController {
     }
 
     public void reset() {
+        wTap = new WTapController(cfg);
         lowerBlock();
         shieldLockout          = 0;
         shieldInMainhand       = false;

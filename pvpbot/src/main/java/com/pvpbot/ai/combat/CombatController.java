@@ -52,7 +52,7 @@ public class CombatController {
     private int attackCooldown = 0;
     private long lastAttackGameTime = Long.MIN_VALUE;
 
-    // W-tap controller — coordinates sprint-stop with weapon charge timing
+    // W-tap controller
     private WTapController wTap;
 
     // Sprint reset (w-tap)
@@ -110,7 +110,7 @@ public class CombatController {
         this.movement  = movement;
         this.inventory = inventory;
         this.cfg       = bot.getConfig();
-        this.wTap      = new WTapController(cfg);
+        this.wTap      = new WTapController(cfg, movement);
         pickNewPattern();
     }
 
@@ -245,15 +245,17 @@ public class CombatController {
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
         if (distSq < minRangeSq || distSq > maxRangeSq) return;
 
-        // W-tap: stop sprint at the configured charge threshold so the
-        // next hit delivers knockback from the momentum bleed.
+        // W-tap: during the cooldown wait, stop sprint at the configured threshold
+        // so the next hit delivers knockback from the momentum bleed.
+        // Skip during BREACH_SWAP (it manages its own jump/crit timing).
         float chargeProgress = fp.getAttackCooldownProgress(0);
-        if (wTap.shouldStopSprint(chargeProgress)) {
-            movement.sprintReset();
+        if (currentPattern != ComboPattern.BREACH_SWAP) {
+            wTap.shouldStopSprint(chargeProgress);
         }
 
-        // Weapon cooldown check — wait until charge reaches attack threshold
-        if (!wTap.canAttack(chargeProgress)) return;
+        // Weapon cooldown check — wait until charge reaches attack threshold.
+        // BREACH_SWAP bypasses this so the mace swing fires on descent timing.
+        if (currentPattern != ComboPattern.BREACH_SWAP && !wTap.canAttack(chargeProgress)) return;
 
         // Accuracy check
         if (!target.isOnGround() && rng.nextDouble() < cfg.accuracyReduction) return;
@@ -1112,7 +1114,7 @@ public class CombatController {
     }
 
     public void reset() {
-        wTap = new WTapController(cfg);
+        wTap = new WTapController(cfg, movement);
         lowerBlock();
         shieldLockout          = 0;
         shieldInMainhand       = false;

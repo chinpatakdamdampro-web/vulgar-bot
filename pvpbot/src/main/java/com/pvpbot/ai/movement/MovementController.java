@@ -251,6 +251,17 @@ public class MovementController {
         bot.getFakePlayer().setVelocity(vel.x * 0.4, vel.y, vel.z * 0.4);
     }
 
+    /**
+     * Stops sprinting without bleeding velocity.
+     * Used by WTapController during the cooldown wait window — we want
+     * the sprint flag off before the hit lands (so the game registers the
+     * momentum change as a w-tap knockback) but we do NOT touch velocity
+     * until the attack actually fires, otherwise the cooldown resets to 0.
+     */
+    public void sprintStop() {
+        setSprinting(false);
+    }
+
     public void resumeSprint() { setSprinting(true); }
 
     // -------------------------------------------------------------------------

@@ -24,16 +24,9 @@ public class BotConfig {
     public float minCps                  = 7.0f;
     public float maxCps                  = 13.0f;
 
-    /**
-     * W-tap sprint-stop charge threshold — bot stops sprinting at this weapon
-     * charge progress (0.0–1.0) so momentum bleed primes knockback on the hit.
-     */
-    public float wTapStopAt  = 0.80f;
-
-    /**
-     * W-tap attack charge threshold — bot swings when weapon charge reaches this.
-     * Should always be >= wTapStopAt.
-     */
+    /** W-tap: stop sprinting at this weapon charge (0.0–1.0). */
+    public float wTapStopAt   = 0.80f;
+    /** W-tap: attack at this weapon charge. Must be >= wTapStopAt. */
     public float wTapAttackAt = 0.95f;
 
     // -------------------------------------------------------------------------
@@ -187,8 +180,8 @@ public class BotConfig {
                 potionCheckIntervalTicks = 9999;   // effectively disabled
                 strafeFrequency          = 0.75;   // almost never strafes
                 preferredRange           = 2.8;
-                wTapStopAt               = 0.90f;  // stops sprint late, less w-tap pressure
-                wTapAttackAt             = 1.00f;  // only attacks at full charge
+                wTapStopAt               = 0.90f;
+                wTapAttackAt             = 1.00f;
             }
             case MEDIUM -> {
                 attackCooldownTicks      = 11;

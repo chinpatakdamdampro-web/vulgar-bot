@@ -3,8 +3,11 @@ package com.pvpbot.ai.combat;
 import carpet.patches.EntityPlayerMPFake;
 import com.pvpbot.config.BotConfig;
 import net.minecraft.block.Blocks;
+import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.util.math.Direction;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
@@ -98,22 +101,25 @@ public class CobwebEscapeController {
 
         // Aim at the cobweb centre
         var blockCentre = miningPos.toCenterPos();
-        fake.getLookControl(); // ensure look is initialised
-        fake.lookAt(net.minecraft.entity.EntityAnchorArgument.AnchorPoint.EYES,
+        fake.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES,
                     new net.minecraft.util.math.Vec3d(blockCentre.x, blockCentre.y, blockCentre.z));
 
         // Progress block breaking through the interaction manager
-        // continueMining sends the progress to the server each tick,
-        // exactly as a real player holding left-click would
+
         var state = world.getBlockState(miningPos);
         float delta = state.calcBlockBreakingDelta(fake, world, miningPos);
 
         mineProgress += delta;
         miningTicks++;
 
-        fake.interactionManager.continueMining(world, miningPos,
-                net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket.Action.START_DESTROY_BLOCK,
-                net.minecraft.util.math.Direction.UP);
+        // processBlockBreakingAction is the public entry point for block breaking;
+        // worldHeight is used for the anti-cheat bounds check — world.getHeight() is correct
+        fake.interactionManager.processBlockBreakingAction(
+                miningPos,
+                PlayerActionC2SPacket.Action.START_DESTROY_BLOCK,
+                Direction.UP,
+                world.getHeight(),
+                0);
 
         if (mineProgress >= 1.0f) {
             // Block should break — force remove if still there

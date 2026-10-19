@@ -15,7 +15,11 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.Random;
-import com.pvpbot.ai.combat.WTapController;
+import com.pvpbot.ai.combat.FightState;
+import com.pvpbot.ai.combat.StrafeController;
+import com.pvpbot.ai.combat.AxeController;
+import com.pvpbot.ai.combat.ComboBreakController;
+import com.pvpbot.ai.combat.CobwebEscapeController;
 
 /**
  * CombatController â€” full PvP AI brain.
@@ -51,9 +55,6 @@ public class CombatController {
     // Attack timing
     private int attackCooldown = 0;
     private long lastAttackGameTime = Long.MIN_VALUE;
-
-    // W-tap controller
-    private WTapController wTap;
 
     // Sprint reset (w-tap)
     private int sprintResetTimer = 0;
@@ -110,7 +111,11 @@ public class CombatController {
         this.movement  = movement;
         this.inventory = inventory;
         this.cfg       = bot.getConfig();
-        this.wTap      = new WTapController(cfg, movement);
+        this.fightState   = new FightState();
+        this.strafeCtrl   = new StrafeController(cfg);
+        this.axeCtrl      = new AxeController(cfg);
+        this.comboBreak   = new ComboBreakController(cfg, movement);
+        this.cobwebEscape = new CobwebEscapeController(cfg);
         pickNewPattern();
     }
 
@@ -123,6 +128,13 @@ public class CombatController {
         if (target == null || !target.isAlive()) return;
 
         EntityPlayerMPFake fp = bot.getFakePlayer();
+
+        // Fight state tick — must run every tick regardless of what else fires
+        fightState.tick();
+
+        // COBWEB ESCAPE — if bot is trapped, mine out before anything else.
+        // Returns true while escaping; no attack/movement code runs during this.
+        if (cobwebEscape.tick(fp, (net.minecraft.server.world.ServerWorld) fp.getWorld())) return;
 
         // LOW HEALTH â€” retreat (but not if we just popped a totem and are recovering)
         if (fp.getHealth() <= cfg.gappleThreshold
@@ -140,8 +152,10 @@ public class CombatController {
             potionCheckTimer = cfg.potionCheckIntervalTicks;
         }
 
-        // While knockback is being ridden out, pause attacks but keep looking
+        // While knockback is being ridden out, pause attacks but keep looking.
+        // Count being knocked back as taking a hit for combo tracking.
         if (movement.getKnockbackSuppressTicks() > 0) {
+            fightState.onHitTaken();
             movement.lookAtTarget(target);
             return;
         }
@@ -220,6 +234,12 @@ public class CombatController {
             return;
         }
 
+        // Combo break — jump away if being comboed.
+        // Skipped during BREACH_SWAP, while waiting for crit arc, or while shielding.
+        if (currentPattern != ComboPattern.BREACH_SWAP && !waitingForCrit && !shielding) {
+            comboBreak.tick(fightState, fp);
+        }
+
         // Attack cooldown
         if (attackCooldown > 0) { attackCooldown--; return; }
 
@@ -245,17 +265,8 @@ public class CombatController {
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
         if (distSq < minRangeSq || distSq > maxRangeSq) return;
 
-        // W-tap: during the cooldown wait, stop sprint at the configured threshold
-        // so the next hit delivers knockback from the momentum bleed.
-        // Skip during BREACH_SWAP (it manages its own jump/crit timing).
-        float chargeProgress = fp.getAttackCooldownProgress(0);
-        if (currentPattern != ComboPattern.BREACH_SWAP) {
-            wTap.shouldStopSprint(chargeProgress);
-        }
-
-        // Weapon cooldown check — wait until charge reaches attack threshold.
-        // BREACH_SWAP bypasses this so the mace swing fires on descent timing.
-        if (currentPattern != ComboPattern.BREACH_SWAP && !wTap.canAttack(chargeProgress)) return;
+        // Weapon cooldown check
+        if (fp.getAttackCooldownProgress(0) < 0.9f) return;
 
         // Accuracy check
         if (!target.isOnGround() && rng.nextDouble() < cfg.accuracyReduction) return;
@@ -589,7 +600,9 @@ public class CombatController {
         if (!target.isBlocking()) return;
         double distSq = targeting.distanceToTargetSq();
         if (distSq > cfg.attackReach * cfg.attackReach) return;
-        if (!wTap.canAttack(bot.getFakePlayer().getAttackCooldownProgress(0))) return;
+
+        float charge = bot.getFakePlayer().getAttackCooldownProgress(0);
+        if (!axeCtrl.shouldDisableNow(target, charge)) return;
 
         boolean hasAxe = inventory.equipBestAxe();
         if (!hasAxe) return;
@@ -597,6 +610,7 @@ public class CombatController {
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         if (!tryAttackTarget(target)) return;
 
+        axeCtrl.onDisableSwung();
         axeSwapCooldown = 20;
         inventory.scheduleSwapBackToSword();
     }
@@ -818,6 +832,13 @@ public class CombatController {
     private int breachSwapStep1Timeout = 0;
     private static final int BREACH_SWAP_TIMEOUT = 24;
 
+    // --- Ported vexbot modules (isolated, no conflict with existing attack flow) ---
+    private FightState            fightState;
+    private StrafeController      strafeCtrl;
+    private AxeController         axeCtrl;
+    private ComboBreakController  comboBreak;
+    private CobwebEscapeController cobwebEscape;
+
     /**
      * BREACH_SWAP:
      *   Step 0 â€” sword hit, short cooldown override.
@@ -943,7 +964,8 @@ public class CombatController {
         if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
-        wTap.onAttack();
+        fightState.onOurHit();
+        strafeCtrl.onAttack();
         setNextAttackCooldown();
         return true;
     }
@@ -959,7 +981,7 @@ public class CombatController {
     private boolean tickWebbedPressureAttack(ServerPlayerEntity target) {
         if (!isTargetInCobweb(target)) return false;
         if (shielding) return false;
-        if (!wTap.canAttack(bot.getFakePlayer().getAttackCooldownProgress(0))) return false;
+        if (bot.getFakePlayer().getAttackCooldownProgress(0) < 0.9f) return false;
 
         EntityPlayerMPFake fp = bot.getFakePlayer();
         double dx = target.getX() - fp.getX();
@@ -1004,7 +1026,6 @@ public class CombatController {
         if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
-        wTap.onAttack();
         inventory.scheduleSwapBackToSword();
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;
@@ -1023,7 +1044,6 @@ public class CombatController {
         if (!commitAttackThisTick()) return false;
         bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
-        wTap.onAttack();
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;
         pickNewPattern();
@@ -1114,7 +1134,11 @@ public class CombatController {
     }
 
     public void reset() {
-        wTap = new WTapController(cfg, movement);
+        fightState.reset();
+        strafeCtrl.reset();
+        axeCtrl.reset();
+        comboBreak.reset();
+        cobwebEscape.reset();
         lowerBlock();
         shieldLockout          = 0;
         shieldInMainhand       = false;

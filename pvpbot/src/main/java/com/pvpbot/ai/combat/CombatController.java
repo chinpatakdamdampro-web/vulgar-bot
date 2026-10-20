@@ -273,7 +273,8 @@ public class CombatController {
 
         // Waiting for crit arc (descending). BREACH_SWAP owns its own step-2
         // timeout so it cannot get stuck staring at a webbed target if a jump fails.
-        if (waitingForCrit && !(currentPattern == ComboPattern.BREACH_SWAP && comboStep == 2)) {
+        if (waitingForCrit && !(currentPattern == ComboPattern.BREACH_SWAP
+                && (comboStep == 1 || comboStep == 2))) {
             if (fp.getVelocity().y < -0.08) {
                 waitingForCrit = false;
                 swingAt(target);
@@ -962,8 +963,8 @@ public class CombatController {
         if (shielding) return false;
         if (!isWithinMeleeAttackRange(target)) return false;
         if (!commitAttackThisTick()) return false;
-        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
+        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         fightState.onOurHit();
         strafeCtrl.onAttack();
         setNextAttackCooldown();
@@ -1024,8 +1025,8 @@ public class CombatController {
         breachSwapStep1Timeout = 0;
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         if (!commitAttackThisTick()) return false;
-        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
+        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         inventory.scheduleSwapBackToSword();
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;
@@ -1042,8 +1043,8 @@ public class CombatController {
         inventory.equipBestWeapon(false);
         bot.getFakePlayer().setCurrentHand(Hand.MAIN_HAND);
         if (!commitAttackThisTick()) return false;
-        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         bot.getFakePlayer().attack(target);
+        bot.getFakePlayer().swingHand(Hand.MAIN_HAND);
         attackCooldown = 3 + rng.nextInt(2);
         comboStep = 0;
         pickNewPattern();

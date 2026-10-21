@@ -1,4 +1,3 @@
-
 package com.pvpbot.ai.movement;
 
 import carpet.patches.EntityPlayerMPFake;

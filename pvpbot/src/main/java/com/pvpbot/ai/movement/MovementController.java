@@ -1,3 +1,4 @@
+
 package com.pvpbot.ai.movement;
 
 import carpet.patches.EntityPlayerMPFake;
@@ -28,7 +29,7 @@ public class MovementController {
     private static final int KNOCKBACK_SUPPRESS_TICKS = 6;
 
     // Combat backaway threshold
-    private static final double MIN_COMBAT_RANGE    = 1.4;
+    private static final double MIN_COMBAT_RANGE    = 0.9;
     private static final double MIN_COMBAT_RANGE_SQ = MIN_COMBAT_RANGE * MIN_COMBAT_RANGE;
 
     // Follow stops this many blocks from the target — feels natural, not "touching"
@@ -251,17 +252,6 @@ public class MovementController {
         bot.getFakePlayer().setVelocity(vel.x * 0.4, vel.y, vel.z * 0.4);
     }
 
-    /**
-     * Stops sprinting without bleeding velocity.
-     * Used by WTapController during the cooldown wait window — we want
-     * the sprint flag off before the hit lands (so the game registers the
-     * momentum change as a w-tap knockback) but we do NOT touch velocity
-     * until the attack actually fires, otherwise the cooldown resets to 0.
-     */
-    public void sprintStop() {
-        setSprinting(false);
-    }
-
     public void resumeSprint() { setSprinting(true); }
 
     // -------------------------------------------------------------------------
@@ -415,6 +405,8 @@ public class MovementController {
         BlockState feetState = world.getBlockState(feet);
         BlockState headState = world.getBlockState(head);
 
+        // Treat cobwebs as impassable — bot should not voluntarily walk into them
+        if (isCobweb(feetState) || isCobweb(headState)) return false;
         if (isPassable(feetState, world, feet) && isPassable(headState, world, head)) return true;
 
         // One-block step-up is fine if there is head clearance; two-block walls/trees
@@ -430,6 +422,10 @@ public class MovementController {
 
     private boolean isPassable(BlockState state, net.minecraft.world.WorldView world, BlockPos pos) {
         return state.isAir() || state.getCollisionShape(world, pos).isEmpty();
+    }
+
+    private boolean isCobweb(BlockState state) {
+        return state.isOf(net.minecraft.block.Blocks.COBWEB);
     }
 
     private void tryJumpOverObstacle(EntityPlayerMPFake fp, double dx, double dz) {
@@ -469,6 +465,8 @@ public class MovementController {
             BlockState feetState = world.getBlockState(feet);
             BlockState headState = world.getBlockState(head);
 
+            // Treat cobweb as unsafe path
+            if (isCobweb(feetState) || isCobweb(headState)) return false;
             if (!isPassable(feetState, world, feet)) {
                 if (feetState.isSolidBlock(world, feet)
                         && isPassable(headState, world, head)

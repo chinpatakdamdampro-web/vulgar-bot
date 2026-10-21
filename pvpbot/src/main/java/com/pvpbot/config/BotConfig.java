@@ -24,11 +24,6 @@ public class BotConfig {
     public float minCps                  = 7.0f;
     public float maxCps                  = 13.0f;
 
-    /** W-tap: stop sprinting at this weapon charge (0.0–1.0). */
-    public float wTapStopAt   = 0.80f;
-    /** W-tap: attack at this weapon charge. Must be >= wTapStopAt. */
-    public float wTapAttackAt = 0.95f;
-
     // -------------------------------------------------------------------------
     // Movement
     // -------------------------------------------------------------------------
@@ -180,8 +175,6 @@ public class BotConfig {
                 potionCheckIntervalTicks = 9999;   // effectively disabled
                 strafeFrequency          = 0.75;   // almost never strafes
                 preferredRange           = 2.8;
-                wTapStopAt               = 0.90f;
-                wTapAttackAt             = 1.00f;
             }
             case MEDIUM -> {
                 attackCooldownTicks      = 11;
@@ -196,8 +189,6 @@ public class BotConfig {
                 potionCheckIntervalTicks = 200;
                 strafeFrequency          = 0.35;
                 preferredRange           = 2.5;
-                wTapStopAt               = 0.80f;
-                wTapAttackAt             = 0.95f;
             }
             case HARD -> {
                 attackCooldownTicks      = 9;
@@ -212,8 +203,6 @@ public class BotConfig {
                 potionCheckIntervalTicks = 160;
                 strafeFrequency          = 0.30;
                 preferredRange           = 2.2;
-                wTapStopAt               = 0.72f;
-                wTapAttackAt             = 0.90f;
             }
             case ULTRA_HARD -> {
                 // Same timing stats as HARD
@@ -229,8 +218,6 @@ public class BotConfig {
                 potionCheckIntervalTicks = 120;
                 strafeFrequency          = 0.25;
                 preferredRange           = 2.0;
-                wTapStopAt               = 0.65f;
-                wTapAttackAt             = 0.88f;
                 // Strength III is applied as a live status effect in PvPBotEntity
                 // every tick — not via config values. No further config needed here.
             }
@@ -250,8 +237,6 @@ public class BotConfig {
                 accuracyReduction        = Math.max(0.01, accuracyReduction - 0.05);
                 attackCooldownTicks      = Math.max(6, attackCooldownTicks - 2);
                 preferredRange           = Math.max(1.8, preferredRange - 0.25);
-                wTapStopAt               = Math.max(0.60f, wTapStopAt - 0.05f);
-                wTapAttackAt             = Math.max(0.85f, wTapAttackAt - 0.04f);
             }
             case COMBO, ADAPTIVE -> {
                 critChancePercent        = Math.min(92, critChancePercent + 10);
@@ -265,8 +250,6 @@ public class BotConfig {
                 accuracyReduction        = Math.max(0.01, accuracyReduction - 0.07);
                 attackCooldownTicks      = Math.min(18, attackCooldownTicks + 1);
                 preferredRange           = Math.min(3.0, preferredRange + 0.25);
-                wTapStopAt               = Math.min(0.92f, wTapStopAt + 0.05f);
-                wTapAttackAt             = Math.min(1.00f, wTapAttackAt + 0.03f);
             }
         }
     }

@@ -244,8 +244,8 @@ public class CombatController {
         if (attackCooldown > 0) { attackCooldown--; return; }
 
         // Range check â€” must be outside backaway zone AND within reach.
-        // MIN_COMBAT_RANGE in MovementController is 1.4, so 1.4Â² = 1.96.
-        // Using 1.96 here ensures the bot never tries to attack while
+        // MIN_COMBAT_RANGE in MovementController is 0.9, so 0.9² = 0.81.
+        // minRangeSq matches so bot attacks right up to the backaway threshold.
         // simultaneously backing away â€” which caused the inconsistent freeze.
         // Use horizontal distance for melee gating. Full 3D distance can be inflated by
         // eye-height differences between fake players, which caused bot-vs-bot duels
@@ -261,7 +261,9 @@ public class CombatController {
         // Webbed targets can be pressed directly against the bot by collision/web drag.
         // Do not enforce the normal minimum spacing there, or the bot can stare at
         // a trapped player without swinging because it is "too close".
-        double minRangeSq = targetWebbedForMelee ? 0.0 : (target instanceof EntityPlayerMPFake) ? 0.64 : 1.96;
+        // 0.81 = 0.9² matches MIN_COMBAT_RANGE in MovementController so the
+        // attack dead-zone and backaway zone are the same threshold — no gap.
+        double minRangeSq = targetWebbedForMelee ? 0.0 : (target instanceof EntityPlayerMPFake) ? 0.64 : 0.81;
         double maxRangeSq = cfg.attackReach * cfg.attackReach;
         if (distSq < minRangeSq || distSq > maxRangeSq) return;
 

@@ -227,24 +227,27 @@ public class PvPBotEntity {
      * if difficulty was changed mid-session.
      */
     private void applyDifficultyEffects() {
+        // Only run every 60 ticks — calling addStatusEffect/removeStatusEffect
+        // every tick causes server-side overhead and interferes with potion effects.
+        if (tickCounter % 60 != 0) return;
+
         if (config.difficulty == BotConfig.Difficulty.ULTRA_HARD) {
             var strength = fakePlayer.getStatusEffect(StatusEffects.STRENGTH);
             var resistance = fakePlayer.getStatusEffect(StatusEffects.RESISTANCE);
-            // Refresh every 60 ticks (3 seconds) when duration drops below 100 ticks (5s)
-            if (strength == null || strength.getDuration() < 100) {
-                // amplifier 2 = Strength III (0-indexed: 0=I, 1=II, 2=III)
+            // Refresh when duration drops below 80 ticks so it never expires
+            if (strength == null || strength.getDuration() < 80) {
                 fakePlayer.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.STRENGTH, 200, 2, false, false, false)
                 );
             }
-            if (resistance == null || resistance.getDuration() < 100) {
-                // amplifier 0 = Resistance I
+            if (resistance == null || resistance.getDuration() < 80) {
                 fakePlayer.addStatusEffect(
                     new StatusEffectInstance(StatusEffects.RESISTANCE, 200, 0, false, false, false)
                 );
             }
         } else {
-            // Remove any lingering Ultra Hard effects from a previous session
+            // Remove lingering Ultra Hard effects only if present — avoids
+            // calling removeStatusEffect every 60 ticks on bots that never had them
             if (fakePlayer.hasStatusEffect(StatusEffects.STRENGTH)) {
                 fakePlayer.removeStatusEffect(StatusEffects.STRENGTH);
             }
@@ -258,6 +261,7 @@ public class PvPBotEntity {
      * Applies a new difficulty to this bot at runtime.
      * Reconfigures all BotConfig values and immediately updates passive effects.
      */
+
     public void setDifficulty(BotConfig.Difficulty difficulty) {
         config.difficulty = difficulty;
         config.applyDifficulty();
